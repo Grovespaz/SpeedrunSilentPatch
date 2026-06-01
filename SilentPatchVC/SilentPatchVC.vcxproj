@@ -61,19 +61,20 @@
     <SilentPatchFeatureSet>Speedrun</SilentPatchFeatureSet>
   </PropertyGroup>
   <PropertyGroup>
+    <SilentPatchTargetNamePrefix Condition="'$(SilentPatchFeatureSet)'=='Speedrun'">Speedrun</SilentPatchTargetNamePrefix>
     <SilentPatchFeatureDefinitions Condition="'$(SilentPatchFeatureSet)'=='Speedrun'">SILENTPATCH_SPEEDRUN;</SilentPatchFeatureDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetExt>.asi</TargetExt>
-    <TargetName>SilentPatchVC</TargetName>
+    <TargetName>$(SilentPatchTargetNamePrefix)SilentPatchVC</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetExt>.asi</TargetExt>
-    <TargetName>SilentPatchVC</TargetName>
+    <TargetName>$(SilentPatchTargetNamePrefix)SilentPatchVC</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Shipping|Win32'">
     <TargetExt>.asi</TargetExt>
-    <TargetName>SilentPatchVC</TargetName>
+    <TargetName>$(SilentPatchTargetNamePrefix)SilentPatchVC</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
