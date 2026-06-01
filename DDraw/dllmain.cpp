@@ -11,6 +11,7 @@
 #include "Utils/ScopedUnprotect.hpp"
 
 #include "Common_ddraw.h"
+#include "DDrawFeatureConfig.h"
 #include "Desktop.h"
 
 #pragma comment(lib, "shlwapi.lib")
@@ -93,10 +94,12 @@ static void ProcHook()
 
 		InjectHooks();
 
+#if ENABLE_FIX_DEP_STARTUP_CRASH
 		if ( !rwcsegUnprotected )
 		{
 			rwcsegUnprotected = Common::Patches::FixRwcseg_Patterns();
 		}
+#endif
 	}
 }
 
@@ -206,7 +209,9 @@ static bool PatchIAT_ByPointers()
 
 static void ApplyDDrawHooks()
 {
+#if ENABLE_FIX_DEP_STARTUP_CRASH
 	rwcsegUnprotected = FixRwcseg_Header();
+#endif
 
 	bool getStartupInfoHooked = PatchIAT();
 	if ( !getStartupInfoHooked )

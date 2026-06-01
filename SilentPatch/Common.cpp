@@ -1,5 +1,9 @@
 #include "Common.h"
 
+#if defined(_GTA_III)
+#include "SilentPatchFeatureConfig.h"
+#endif
+
 #include "Utils/MemoryMgr.h"
 #include "Utils/Patterns.h"
 #include "Utils/HookEach.hpp"
@@ -198,6 +202,7 @@ namespace Common {
 
 			const bool HasRwD3D8 = RWGTA::Patches::TryLocateRwD3D8();
 
+#if !defined(_GTA_III) || ENABLE_SUPPORT_DELAYED_PATCHING
 			// Delayed patching
 			try
 			{
@@ -213,8 +218,10 @@ namespace Common {
 				InjectHook( addr_ualHook, Inject_UAL );
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_BOMBS_SAVING
 			// Fixed bomb ownership/bombs saving for bikes
 			try
 			{
@@ -224,8 +231,10 @@ namespace Common {
 				InjectHook( addr, &CStoredCar::RestoreCar_SilentPatch );
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_HANDLING_NAME_MATCHING
 			// Fixed handling.cfg name matching (names don't need unique prefixes anymore)
 			try
 			{
@@ -237,8 +246,10 @@ namespace Common {
 				InjectHook( findExactWord.get<void>( 0xD ), strncmp_Fix );
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_CORONA_LINES
 			// Fixed corona lines rendering on non-nvidia cards
 			try
 			{
@@ -249,8 +260,10 @@ namespace Common {
 				InterceptCall(renderLine, orgRwIm2DRenderLine, RenderLine_SetRecipZ);
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_PICKUP_LIGHT_GLOWS
 			// Fixed static shadows not rendering under fire and pickups
 			if (HasRwD3D8) try
 			{
@@ -282,8 +295,10 @@ namespace Common {
 				HookEach_RestoreAlphaTest(setStateAndReenableAlphaTest, InterceptCall);
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_LIGHTLESS_TAXIS
 			// Reset requested extras if created vehicle has no extras
 			try
 			{
@@ -294,8 +309,10 @@ namespace Common {
 				Nop( resetComps.get<void>( -9 ), 9 );
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_TRAFFIC_LIGHT_PROBABILITY
 			// Rescale light switching randomness in CAutomobile::PreRender/CBike::PreRender for PC the randomness range
 			// The original randomness was 50000 out of 65535, which is impossible to hit with PC's 32767 range
 			try
@@ -315,13 +332,16 @@ namespace Common {
 				});
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_SCRIPT_RANDOMNESS_16BIT || ENABLE_FIX_PED_CHAT_RANDOMNESS_16BIT || ENABLE_FIX_SPAWN_RANDOMNESS_16BIT
 			// Fix various randomness factors expecting 16-bit rand()
 			{
 				// Treat each instance separately
 				using namespace ConsoleRandomness;
 
+#if !defined(_GTA_III) || ENABLE_FIX_SCRIPT_RANDOMNESS_16BIT
 				// Script randomness
 				try
 				{
@@ -336,7 +356,9 @@ namespace Common {
 					}
 				}
 				TXN_CATCH();
+#endif
 
+#if !defined(_GTA_III) || ENABLE_FIX_PED_CHAT_RANDOMNESS_16BIT
 				// CPed::Chat
 				try
 				{
@@ -351,7 +373,9 @@ namespace Common {
 					}
 				}
 				TXN_CATCH();
+#endif
 
+#if !defined(_GTA_III) || ENABLE_FIX_SPAWN_RANDOMNESS_16BIT
 				// CPathFind::NewGenerateCarCreationCoors
 				try
 				{
@@ -359,9 +383,12 @@ namespace Common {
 					InjectHook(rand, rand16);
 				}
 				TXN_CATCH();
+#endif
 			}
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_PRINT_STRING_OVERREAD
 			// Fix PrintString over-reading strings by one character
 			try
 			{
@@ -371,8 +398,10 @@ namespace Common {
 				Patch(print_string, { 0x66, 0x83, 0xF8, 0x20, 0x75, 0x0C, 0x66, 0x83, 0x7F, 0x02, 0x00 });
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_GET_OUT_OF_JAIL_FREE_WEAPONS
 			// Do not remove weapons twice when the player is busted
 			// "Get out of jail free" now lets the player keep their weapons (once), as it was seemingly intended
 			try
@@ -381,6 +410,7 @@ namespace Common {
 				Nop(clear_weapons, 5);
 			}
 			TXN_CATCH();
+#endif
 		}
 
 		void III_VC_DelayedCommon( bool /*hasDebugMenu*/, const wchar_t* wcModulePath )
@@ -388,8 +418,11 @@ namespace Common {
 			using namespace Memory;
 			using namespace hook::txn;
 
+#if !defined(_GTA_III) || ENABLE_FIX_EXTRA_COMPONENT_ENVMAP
 			ExtraCompSpecularity::ReadExtraCompSpecularityExceptions(wcModulePath);
+#endif
 
+#if !defined(_GTA_III) || ENABLE_FIX_VEHICLE_CORONA_FIXES
 			// Corrected taxi light placement for Taxi
 			if ( GetPrivateProfileIntW(L"SilentPatch", L"EnableVehicleCoronaFixes", 0, wcModulePath) != 0 ) try
 			{
@@ -401,8 +434,10 @@ namespace Common {
 				InjectHook( getTaxiLightPos.get<void>(), GetTransformedCoronaPos );
 			}
 			TXN_CATCH();
+#endif
 
 
+#if !defined(_GTA_III) || ENABLE_FIX_USE_DESKTOP_REFRESH_RATE
 			// Make the game use the desktop refresh rate instead of a fixed 60Hz
 			if (GetPrivateProfileIntW(L"SilentPatch", L"UseDesktopRefreshRate", 0, wcModulePath) != 0) try
 			{
@@ -412,6 +447,7 @@ namespace Common {
 				Patch(get_best_refresh_rate, { 0x31, 0xC0, 0xC3 });
 			}
 			TXN_CATCH();
+#endif
 		}
 	}
 }

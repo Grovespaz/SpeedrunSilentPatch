@@ -2,6 +2,12 @@
 
 #include "Desktop.h"
 
+#if defined(_DDRAW)
+#include "DDrawFeatureConfig.h"
+#elif defined(_GTA_III)
+#include "SilentPatchFeatureConfig.h"
+#endif
+
 #define WIN32_LEAN_AND_MEAN
 
 #define WINVER 0x0501
@@ -85,8 +91,11 @@ namespace Common {
 		{
 			using namespace Memory::DynBase;
 
+#if ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x580BB0, GetMyDocumentsPath, HookType::Jump);
+#endif
 
+#if ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x581E5E, width);
@@ -94,18 +103,24 @@ namespace Common {
 				Patch<const char*>(0x581EA8, desktopText);
 			}
 			Patch<BYTE>(0x581E72, 32);
+#endif
 
+#if ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x5812D6, 0xB8);
 			Patch<DWORD>(0x5812D7, 0x900);
+#endif
 		}
 
 		void DDraw_III_11( uint32_t width, uint32_t height, const char* desktopText )
 		{
 			using namespace Memory::DynBase;
 
+#if ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x580F00, GetMyDocumentsPath, HookType::Jump);
+#endif
 
+#if ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x58219E, width);
@@ -113,18 +128,24 @@ namespace Common {
 				Patch<const char*>(0x5821E8, desktopText);
 			}
 			Patch<BYTE>(0x5821B2, 32);
+#endif
 
+#if ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x581620, 0xB8);
 			Patch<DWORD>(0x581621, 0x900);
+#endif
 		}
 
 		void DDraw_III_Steam( uint32_t width, uint32_t height, const char* desktopText )
 		{
 			using namespace Memory::DynBase;
 
+#if ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x580E00, GetMyDocumentsPath, HookType::Jump);
+#endif
 
+#if ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x58208E, width);
@@ -132,10 +153,13 @@ namespace Common {
 				Patch<const char*>(0x5820D8, desktopText);
 			}
 			Patch<BYTE>(0x5820A2, 32);
+#endif
 
+#if ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x581520, 0xB8);
 			Patch<DWORD>(0x581521, 0x900);
+#endif
 		}
 
 		// ================= VC =================
@@ -143,11 +167,14 @@ namespace Common {
 		{
 			using namespace Memory::DynBase;
 
+#if !defined(_DDRAW) || ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x602240, GetMyDocumentsPath, HookType::Jump);
 
 			InjectHook(0x601A40, GetMyDocumentsPath, HookType::Call);
 			InjectHook(0x601A45, DynBaseAddress(0x601B2F), HookType::Jump);
+#endif
 
+#if !defined(_DDRAW) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x600E7E, width);
@@ -155,21 +182,27 @@ namespace Common {
 				Patch<const char*>(0x600EC8, desktopText);
 			}
 			Patch<BYTE>(0x600E92, 32);
+#endif
 
+#if !defined(_DDRAW) || ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x601CA0, 0xB8);
 			Patch<DWORD>(0x601CA1, 0x900);
+#endif
 		}
 
 		void DDraw_VC_11( uint32_t width, uint32_t height, const char* desktopText )
 		{
 			using namespace Memory::DynBase;
 
+#if !defined(_DDRAW) || ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x602220, GetMyDocumentsPath, HookType::Jump);
 
 			InjectHook(0x601A70, GetMyDocumentsPath, HookType::Call);
 			InjectHook(0x601A75, DynBaseAddress(0x601B5F), HookType::Jump);
+#endif
 
+#if !defined(_DDRAW) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x600E9E, width);
@@ -177,10 +210,13 @@ namespace Common {
 				Patch<const char*>(0x600EE8, desktopText);
 			}
 			Patch<BYTE>(0x600EB2, 32);
+#endif
 
+#if !defined(_DDRAW) || ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x601CD0, 0xB8);
 			Patch<DWORD>(0x601CD1, 0x900);
+#endif
 		}
 
 
@@ -188,11 +224,14 @@ namespace Common {
 		{
 			using namespace Memory::DynBase;
 
+#if !defined(_DDRAW) || ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x601E60, GetMyDocumentsPath, HookType::Jump);
 
 			InjectHook(0x6016B0, GetMyDocumentsPath, HookType::Call);
 			InjectHook(0x6016B5, DynBaseAddress(0x60179F), HookType::Jump);
+#endif
 
+#if !defined(_DDRAW) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x600ADE, width);
@@ -200,10 +239,13 @@ namespace Common {
 				Patch<const char*>(0x600B28, desktopText);
 			}
 			Patch<BYTE>(0x600AF2, 32);
+#endif
 
+#if !defined(_DDRAW) || ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x601910, 0xB8);
 			Patch<DWORD>(0x601911, 0x900);
+#endif
 		}
 
 		// ================= COMMON =================
@@ -212,6 +254,7 @@ namespace Common {
 			using namespace Memory;
 			using namespace hook::txn;
 
+#if (!defined(_GTA_III) && !defined(_DDRAW)) || ENABLE_FIX_IMG_NO_BUFFERING
 			// Remove FILE_FLAG_NO_BUFFERING from CdStreams
 			try
 			{
@@ -219,7 +262,9 @@ namespace Common {
 				Patch<uint8_t>( mem, 0xEB );
 			}
 			TXN_CATCH();
+#endif
 
+#if !defined(_GTA_III) && !defined(_DDRAW)
 			// III: Patch the icon handle to fix missing window icon
 			// (This is fixed since VC)
 			try
@@ -230,7 +275,9 @@ namespace Common {
 				Patch<HICON>(addr, wndIconIII);
 			}
 			TXN_CATCH();
+#endif
 
+#if (!defined(_GTA_III) && !defined(_DDRAW)) || ENABLE_ENHANCEMENT_NO_CENSORSHIP
 			// No censorships
 			try
 			{
@@ -238,7 +285,9 @@ namespace Common {
 				Patch( addr, { 0xEB, 0x5E } );	
 			}
 			TXN_CATCH();
+#endif
 
+#if (!defined(_GTA_III) && !defined(_DDRAW)) || ENABLE_FIX_UNNAMED_CDSTREAM_SEMAPHORE
 			// unnamed CdStream semaphore
 			try
 			{
@@ -248,7 +297,9 @@ namespace Common {
 				Nop( mem.get<void>( 0x25 + 2 ), 3 );			
 			}
 			TXN_CATCH();
+#endif
 
+#if (!defined(_GTA_III) && !defined(_DDRAW)) || ENABLE_FIX_FAKE_VRAM_POLL
 			// Fake the VRAM poll
 			{
 				// III/VC
@@ -274,6 +325,7 @@ namespace Common {
 				}
 				TXN_CATCH();
 			}
+#endif
 		}
 	}
 }

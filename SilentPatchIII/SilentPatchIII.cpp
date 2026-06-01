@@ -11,6 +11,7 @@
 #include "RWUtils.hpp"
 #include "TheFLAUtils.h"
 #include "SVF.h"
+#include "SilentPatchFeatureConfig.h"
 
 #include <array>
 #include <memory>
@@ -959,7 +960,9 @@ namespace VariableResets
 				}, var );
 		}
 
+#if ENABLE_FIX_PURPLE_NINES_GLITCH
 		PurpleNinesGlitchFix();
+#endif
 	}
 
 	template<std::size_t Index>
@@ -978,7 +981,9 @@ namespace VariableResets
 	void GameInitialise(const char* path)
 	{
 		ReInitOurVariables();
+#if ENABLE_FIX_TIMERS_RESET_NEW_GAME
 		TimerInitialise();
+#endif
 		orgGameInitialise(path);
 	}
 
@@ -1905,6 +1910,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 	const HMODULE skygfxModule = moduleList.Get(L"skygfx");
 	const HMODULE iiiAircraftModule = moduleList.Get(L"IIIAircraft");
 	const bool bLC01 = moduleList.GetByPrefix(L"LC01") != nullptr;
+#if ENABLE_FIX_EXTRA_COMPONENT_ENVMAP
 	if (skygfxModule != nullptr)
 	{
 		auto attachCarPipe = reinterpret_cast<void(*)(RwObject*)>(GetProcAddress(skygfxModule, "AttachCarPipeToRwObject"));
@@ -1913,12 +1919,16 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 			CVehicleModelInfo::AttachCarPipeToRwObject = attachCarPipe;
 		}
 	}
+#endif
 
+#if ENABLE_FIX_CLAUDE_SIT_IN_SPEEDER
 	if (ModCompat::IIIAircraftNeedsSkimmerFallback(iiiAircraftModule))
 	{
 		SVF::RegisterFeature(156, SVF::Feature::SIT_IN_BOAT);
 	}
+#endif
 
+#if ENABLE_ENHANCEMENT_LOCALE_UNITS
 	// Locale based metric/imperial system INI/debug menu
 	{
 		using namespace Localization;
@@ -1931,7 +1941,9 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 			DebugMenuEntrySetWrap(e, true);
 		}
 	}
+#endif
 
+#if ENABLE_FIX_CRUSHER_CRANE_MODELS
 	// Make crane be unable to lift Coach instead of Blista
 	try
 	{
@@ -1940,8 +1952,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		Patch<int8_t>( canPickBlista, 127 ); // coach
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_VEHICLE_CORONA_FIXES
 	// Corrected siren corona placement for emergency vehicles
 	if ( GetPrivateProfileIntW(L"SilentPatch", L"EnableVehicleCoronaFixes", 0, wcModulePath) != 0 )
 	{
@@ -2023,8 +2037,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		}
 		TXN_CATCH();
 	}
+#endif
 
 
+#if ENABLE_FIX_FBI_CAR_SIREN_SOUND
 	// Corrected FBI Car secondary siren sound
 	try
 	{
@@ -2036,8 +2052,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		InterceptCall(usesSirenSwitching.get<void>(), orgUsesSirenSwitching, UsesSirenSwitching_FbiCar);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CRANES_NIGHT_WINDOWS_LOD
 	// Corrected CSimpleModelInfo::SetupBigBuilding minimum draw distance for big buildings without a matching model
 	// Fixes cranes in Portland and bright windows in the city
 	// By aap
@@ -2051,8 +2069,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		InjectHook( setupMinDist.get<void>( 2 ), &CSimpleModelInfo::SetNearDistanceForLOD_SilentPatch, HookType::Call );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_SUPPORT_FLA_UTILS
 	// Register CBaseModelInfo::GetModelInfo for SVF so we can resolve model names
 	try
 	{
@@ -2065,8 +2085,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		SVF::RegisterGetModelInfoCB(getModelInfo);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_ENHANCEMENT_SUBTITLE_FIXES || ENABLE_FIX_RADAR_DISC_SCALING
 	// Both these fixes touch the radar, and subtitles must go first, as they need to save the "unscaled" radardisc width
 	if (!bLC01) try
 	{
@@ -2074,6 +2096,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		auto drawRadardisc = pattern("D8 05 ? ? ? ? D9 1C 24 DB 05 ? ? ? ? 50 D8 0D ? ? ? ? D8 0D ? ? ? ? D8 05 ? ? ? ? D8 05 ? ? ? ? D9 1C 24 D9 C0 D8 25 ? ? ? ? 50 D9 1C 24 8D 8C 24 ? ? ? ? FF 35")
 			.get_one();
 
+#if ENABLE_ENHANCEMENT_SUBTITLE_FIXES
 		// Fix subtitles attempting to make space for the radar and failing - finish the feature like Vice City did
 		if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"EnableSubtitleFixes", -1, wcModulePath); INIoption != -1) try
 		{
@@ -2125,7 +2148,9 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 			}
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_RADAR_DISC_SCALING
 		// Fix the radar disc shadow scaling and radar X position
 		try
 		{
@@ -2177,10 +2202,13 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 			InterceptCall(drawMap, orgDrawMap, DrawMap_RecalculatePositions<radarXPos.size(), radarYPos.size()>);
 		}
 		TXN_CATCH();
+#endif
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ONSCREEN_COUNTER_BAR_SCALING
 	// Fix the onscreen counter bar X placement not scaling to resolution
 	try
 	{
@@ -2200,8 +2228,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		InterceptCall(atoiWrap, orgAtoi, atoi_RecalculatePositions<XPositions.size(), 0>);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CREDITS_SCALING
 	// Fix credits not scaling to resolution
 	try
 	{
@@ -2235,14 +2265,17 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MISSION_TEXT_DURATION || ENABLE_ENHANCEMENT_SLIDING_TEXTS
 	// Fix some big messages staying on screen longer at high resolutions due to a cut sliding text feature
 	// Also since we're touching it, optionally allow to re-enable this feature.
 	try
 	{
 		using namespace SlidingTextsScalingFixes;
 
+#if ENABLE_FIX_MISSION_TEXT_DURATION
 		// "Unscale" text sliding thresholds, so texts don't stay on screen longer at high resolutions
 		auto scalingThreshold = pattern("A1 ? ? ? ? 59 83 C0 EC").count(2);
 
@@ -2250,7 +2283,9 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 			{
 				Patch(match.get<void>(1), &FIXED_RES_WIDTH_SCALE);
 			});
+#endif
 
+#if ENABLE_ENHANCEMENT_SLIDING_TEXTS
 		// Optional sliding texts
 		if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"SlidingMissionTitleText", -1, wcModulePath); INIoption != -1) try
 		{
@@ -2298,10 +2333,13 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 			}
 		}
 		TXN_CATCH();
+#endif
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 	// Fix CDarkel sliding text
 	try
 	{
@@ -2314,8 +2352,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		HookEach_PrintString(darkel_print_string, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 	// Fix CGarages vertical text position
 	try
 	{
@@ -2338,8 +2378,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		InterceptCall(set_font_style, orgSetFontStyle, SetFontStyle_RecalculateOffset<print_messages_y.size()>);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
 	// Fix "Welcome to" island loading splash X position not scaling to resolution
 	try
 	{
@@ -2354,8 +2396,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		HookEach_PrintString(print_string, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_BRAKELIGHTS_DUMMY
 	// Restore the 'brakelights' dummy as it's vanished from the III PC code
 	try
 	{
@@ -2388,8 +2432,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TEXT_BOX_PADDING_SCALING
 	// Fix text background padding not scaling to resolution
 	try
 	{
@@ -2436,8 +2482,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		InterceptCall(setJustifyOff_helpBox, orgSetJustifyOff, SetJustifyOff_Recalculate<wrapxWidth.size()>);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
 	// Fix menu texts not scaling to resolution
 	{
 		using namespace MenuManagerScalingFixes;
@@ -2466,8 +2514,10 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		}
 		TXN_CATCH();
 	}
+#endif
 
 
+#if ENABLE_FIX_SCRIPT_SPRITE_SCALING
 	// Apply bilinear filtering on script sprites and scale them to resolution
 	if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"ScaleScriptSprites", -1, wcModulePath); INIoption != -1) try
 	{
@@ -2495,8 +2545,11 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		}
 	}
 	TXN_CATCH();
+#endif
 
+#if ENABLE_SUPPORT_FLA_UTILS
 	FLAUtils::Init(moduleList);
+#endif
 }
 
 void InjectDelayedPatches()
@@ -2521,13 +2574,17 @@ void Patch_III_10(uint32_t width, uint32_t height)
 	using namespace Memory::DynBase;
 
 	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x584C42);
+
+#if ENABLE_FIX_HEADLIGHT_CORONAS
 	HeadlightsFix_JumpBack = (void*)DynBaseAddress(0x5382F2);
 
 	Patch<BYTE>(0x490F83, 1);
 
 	Patch<WORD>(0x5382BF, 0x0EEB);
 	InjectHook(0x5382EC, HeadlightsFix, HookType::Jump);
+#endif
 
+#if ENABLE_FIX_PICKUP_LIGHT_GLOWS || ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 	{
 		using namespace ScalingFixes;
 
@@ -2545,9 +2602,13 @@ void Patch_III_10(uint32_t width, uint32_t height)
 		HookEach_SetScale_Darkel(set_scale_darkel, InterceptCall);
 		HookEach_SetScale_Garages(set_scale_garages, InterceptCall);
 	}
+#endif
 
+#if ENABLE_FIX_WET_ROAD_REFLECTIONS
 	InjectHook(0x4F9E4D, FixedRefValue);
+#endif
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	{
 		using namespace PrintStringShadows;
 		using namespace UIScales;
@@ -2575,7 +2636,9 @@ void Patch_III_10(uint32_t width, uint32_t height)
 		X<0x50A139, HudMessages>::Hook(0x50A142); // Big message 2
 		XY<0x57E9EE, 0x57E9CD, MusicManager>::Hook(0x57E9F5); // Radio station name
 	}
+#endif
 
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
 	ReadCall( 0x48E539, orgConstructRenderList );
 	InjectHook(0x48E539, ResetMousePos);
@@ -2583,33 +2646,46 @@ void Patch_III_10(uint32_t width, uint32_t height)
 	// New wndproc
 	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581C74);
 	Patch(0x581C74, &pCustomWndProc);
+#endif
 
+#if ENABLE_FIX_ARMOR_CHEAT_10
 	// Armour cheat as TORTOISE - like in 1.1 and Steam
 	Patch<const char*>(0x4925FB, "ESIOTROT");
+#endif
 
+#if ENABLE_FIX_BOOOOORING_CHEAT_10
 	// BOOOOORING fixed
 	Patch<BYTE>(0x4925D7, 10);
+#endif
 
+#if ENABLE_FIX_PRECISE_FRAME_LIMITER
 	// (Hopefully) more precise frame limiter
 	ReadCall( 0x582EFD, RsEventHandler );
 	InjectHook(0x582EFD, NewFrameRender);
 	InjectHook(0x582EA4, GetTimeSinceLastFrame);
+#endif
 
 
+#if ENABLE_FIX_RADAR_BLIP_LIMIT
 	// Radar blips bounds check
 	InjectHook(0x4A55B2, RadarBoundsCheckCoordBlip, HookType::Jump);
 	InjectHook(0x4A5658, RadarBoundsCheckEntityBlip, HookType::Jump);
+#endif
 
 
+#if ENABLE_FIX_NO_CD
 	// No-CD fix (from CLEO)
 	Patch<DWORD>(0x566A15, 0);
 	Nop(0x566A56, 6);
 	Nop(0x581C44, 2);
 	Nop(0x581C52, 2);
 	Patch<const char*>(0x566A3D, "");
+#endif
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// Fixed crash related to autopilot timing calculations
 	InjectHook(0x4139B2, AutoPilotTimerFix_III, HookType::Jump);
+#endif
 
 	Common::Patches::DDraw_III_10( width, height, aNoDesktopMode );
 }
@@ -2619,13 +2695,17 @@ void Patch_III_11(uint32_t width, uint32_t height)
 	using namespace Memory::DynBase;
 
 	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x584F82);
+
+#if ENABLE_FIX_HEADLIGHT_CORONAS
 	HeadlightsFix_JumpBack = (void*)DynBaseAddress(0x538532);
 
 	Patch<BYTE>(0x491043, 1);
 
 	Patch<WORD>(0x5384FF, 0x0EEB);
 	InjectHook(0x53852C, HeadlightsFix, HookType::Jump);
+#endif
 
+#if ENABLE_FIX_PICKUP_LIGHT_GLOWS || ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 	{
 		using namespace ScalingFixes;
 
@@ -2643,9 +2723,13 @@ void Patch_III_11(uint32_t width, uint32_t height)
 		HookEach_SetScale_Darkel(set_scale_darkel, InterceptCall);
 		HookEach_SetScale_Garages(set_scale_garages, InterceptCall);
 	}
+#endif
 
+#if ENABLE_FIX_WET_ROAD_REFLECTIONS
 	InjectHook(0x4F9F2D, FixedRefValue);
+#endif
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	{
 		using namespace PrintStringShadows;
 		using namespace UIScales;
@@ -2673,7 +2757,9 @@ void Patch_III_11(uint32_t width, uint32_t height)
 		X<0x50A219, HudMessages>::Hook(0x50A222); // Big message 2
 		XY<0x57ED3E, 0x57ED1D, MusicManager>::Hook(0x57ED45); // Radio station name
 	}
+#endif
 
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
 	ReadCall( 0x48E5F9, orgConstructRenderList );
 	InjectHook(0x48E5F9, ResetMousePos);
@@ -2681,27 +2767,36 @@ void Patch_III_11(uint32_t width, uint32_t height)
 	// New wndproc
 	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581FB4);
 	Patch(0x581FB4, &pCustomWndProc);
+#endif
 
+#if ENABLE_FIX_PRECISE_FRAME_LIMITER
 	// (Hopefully) more precise frame limiter
 	ReadCall( 0x58323D, RsEventHandler );
 	InjectHook(0x58323D, NewFrameRender);
 	InjectHook(0x5831E4, GetTimeSinceLastFrame);
+#endif
 
 
+#if ENABLE_FIX_RADAR_BLIP_LIMIT
 	// Radar blips bounds check
 	InjectHook(0x4A56A2, RadarBoundsCheckCoordBlip, HookType::Jump);
 	InjectHook(0x4A5748, RadarBoundsCheckEntityBlip, HookType::Jump);
+#endif
 
 
+#if ENABLE_FIX_NO_CD
 	// No-CD fix (from CLEO)
 	Patch<DWORD>(0x566B55, 0);
 	Nop(0x566B96, 6);
 	Nop(0x581F84, 2);
 	Nop(0x581F92, 2);
 	Patch<const char*>(0x566B7D, "");
+#endif
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// Fixed crash related to autopilot timing calculations
 	InjectHook(0x4139B2, AutoPilotTimerFix_III, HookType::Jump);
+#endif
 
 	Common::Patches::DDraw_III_11( width, height, aNoDesktopMode );
 }
@@ -2712,8 +2807,11 @@ void Patch_III_Steam(uint32_t width, uint32_t height)
 
 	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x584E72);
 
+#if ENABLE_FIX_UNMAPPED_VERSION_PATCH
 	Patch<BYTE>(0x490FD3, 1);
+#endif
 
+#if ENABLE_FIX_PICKUP_LIGHT_GLOWS || ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 	{
 		using namespace ScalingFixes;
 
@@ -2731,9 +2829,13 @@ void Patch_III_Steam(uint32_t width, uint32_t height)
 		HookEach_SetScale_Darkel(set_scale_darkel, InterceptCall);
 		HookEach_SetScale_Garages(set_scale_garages, InterceptCall);
 	}
+#endif
 
+#if ENABLE_FIX_WET_ROAD_REFLECTIONS
 	InjectHook(0x4F9EBD, FixedRefValue);
+#endif
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	{
 		using namespace PrintStringShadows;
 		using namespace UIScales;
@@ -2761,7 +2863,9 @@ void Patch_III_Steam(uint32_t width, uint32_t height)
 		X<0x50A1A9, HudMessages>::Hook(0x50A1B2); // Big message 2
 		XY<0x57EC3E, 0x57EC1D, MusicManager>::Hook(0x57EC45); // Radio station name
 	}
+#endif
 
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
 	ReadCall( 0x48E589, orgConstructRenderList );
 	InjectHook(0x48E589, ResetMousePos);
@@ -2769,19 +2873,26 @@ void Patch_III_Steam(uint32_t width, uint32_t height)
 	// New wndproc
 	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581EA4);
 	Patch(0x581EA4, &pCustomWndProc);
+#endif
 
+#if ENABLE_FIX_PRECISE_FRAME_LIMITER
 	// (Hopefully) more precise frame limiter
 	ReadCall( 0x58312D, RsEventHandler );
 	InjectHook(0x58312D, NewFrameRender);
 	InjectHook(0x5830D4, GetTimeSinceLastFrame);
+#endif
 
 
+#if ENABLE_FIX_RADAR_BLIP_LIMIT
 	// Radar blips bounds check
 	InjectHook(0x4A5632, RadarBoundsCheckCoordBlip, HookType::Jump);
 	InjectHook(0x4A56D8, RadarBoundsCheckEntityBlip, HookType::Jump);
+#endif
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// Fixed crash related to autopilot timing calculations
 	InjectHook(0x4139B2, AutoPilotTimerFix_III, HookType::Jump);
+#endif
 
 	Common::Patches::DDraw_III_Steam( width, height, aNoDesktopMode );
 }
@@ -2796,6 +2907,7 @@ void Patch_III_Common()
 
 	const bool bSSESupported = (cpuinfo[3] & (1 << 25)) != 0;
 
+#if ENABLE_FIX_RADAR_TRACE_SCALING
 	// Scale the radar trace (blip) to resolution
 	try
 	{
@@ -2808,8 +2920,10 @@ void Patch_III_Common()
 		HookEach_DrawRect(draw_rect, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	// Scale the subtitle shadows correctly
 	try
 	{
@@ -2822,8 +2936,10 @@ void Patch_III_Common()
 		InterceptCall(crect_ctor, orgCRectCtor, CRectCtor_ShadowAdjust);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_M16_STATS
 	// Fix M16 first person aiming not adding to the instant hits fired stat
 	try
 	{
@@ -2836,8 +2952,10 @@ void Patch_III_Common()
 		InterceptCall(find_player_ped, orgFindPlayerPed, FindPlayerPed_CountHit);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MOUSE_SENSITIVITY_SAVE
 	// Don't reset mouse sensitivity on New Game
 	try
 	{
@@ -2858,7 +2976,9 @@ void Patch_III_Common()
 		InterceptCall(camera_ctor_init, orgCtorCameraInit, CtorCameraInit_InitSensitivity);
 	}
 	TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// New timers fix
 	try
 	{
@@ -2869,8 +2989,10 @@ void Patch_III_Common()
 		InjectHook( hookPoint.get<void>( 0x21 + 5 ), jmpPoint, HookType::Jump );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ALT_F4
 	// Alt+F4
 	try
 	{
@@ -2882,8 +3004,10 @@ void Patch_III_Common()
 		});
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CAR_PANELS_DAMAGE
 	// Proper panels damage
 	try
 	{
@@ -2894,8 +3018,10 @@ void Patch_III_Common()
 		Nop( addr.get<void>( 0x3F ), 7 );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_METRIC_IMPERIAL_CONSTANTS
 	// Proper metric-imperial conversion constants
 	try
 	{
@@ -2910,8 +3036,10 @@ void Patch_III_Common()
 		Patch<const void*>( addr.get(3).get<void>( 2 ), &METERS_TO_FEET );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CAR_CHASE_PATHFINDING
 	// Improved pathfinding in PickNextNodeAccordingStrategy - PickNextNodeToChaseCar with XYZ coords
 	try
 	{
@@ -2945,8 +3073,10 @@ void Patch_III_Common()
 		InjectHook( funcAddr + 0x2A, funcAddr + 0x182, HookType::Jump );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_ENHANCEMENT_NO_CENSORSHIP
 	// No censorships
 	try
 	{
@@ -2954,8 +3084,10 @@ void Patch_III_Common()
 		Patch( addr, { 0x83, 0xC4, 0x08, 0xC3 } );	// add     esp, 8 \ retn
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CARGEN_COUNTERS
 	// 014C cargen counter fix (by spaceeinstein)
 	try
 	{
@@ -2965,8 +3097,10 @@ void Patch_III_Common()
 		Patch<uint8_t>( do_processing.get<uint8_t*>(7), 0x74 ); // jge -> jz
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ZERO_AMMO_SCM
 	// Fixed ammo from SCM
 	try
 	{
@@ -2979,8 +3113,10 @@ void Patch_III_Common()
 		HookEach_GiveWeapon(give_weapon, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_SUPPORT_FLA_UTILS
 	// Credits =)
 	try
 	{
@@ -2991,8 +3127,10 @@ void Patch_III_Common()
 		InjectHook( renderCredits.get<void>( -5 ), Credits::PrintSPCredits );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_KEYBOARD_LATENCY
 	// Decreased keyboard input latency
 	try
 	{
@@ -3011,8 +3149,10 @@ void Patch_III_Common()
 		InjectHook( updatePads.get<void>( 10 ), jmpDest, HookType::Jump );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_ENHANCEMENT_LOCALE_UNITS
 	// Locale based metric/imperial system
 	try
 	{
@@ -3037,8 +3177,10 @@ void Patch_III_Common()
 		Nop( constructStatLine.get<void>( -0xF + 12 ), 3 );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_NO_SOUND_CARD_CRASH
 	// Add cDMAudio::IsAudioInitialised checks before constructing cAudioScriptObject, like in VC
 	try
 	{
@@ -3079,8 +3221,10 @@ void Patch_III_Common()
 		InjectHook( loadAllAudioScriptObjects, LoadAllAudioScriptObjects_InitializedCheck );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CHOPPER_BOUNDS
 	// Give chopper/escape a properly sized collision bounding box instead of using ped's
 	try
 	{
@@ -3093,8 +3237,10 @@ void Patch_III_Common()
 		Patch( initHelis.get<void>( 9 + 3 ), &colModelChopper );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_DOUBLE_EXPLOSION
 	// Fixed vehicles exploding twice if the driver leaves the car while it's exploding
 	try
 	{
@@ -3118,8 +3264,10 @@ void Patch_III_Common()
 		Nop(pedSetOutCar, 3);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ONE_WAY_ROADS_RIGHT_TURN
 	// Fixed an inverted condition in CCarCtrl::PickNextNodeRandomly
 	// leading to cars being unable to turn right from one way roads
 	// By Nick007J
@@ -3129,8 +3277,10 @@ void Patch_III_Common()
 		Patch<uint8_t>(pickNodeRandomly, 0x75);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_PLAYER_SKIN_FILTER
 	// Apply bilinear filtering on the player skin
 	try
 	{
@@ -3140,8 +3290,10 @@ void Patch_III_Common()
 		InterceptCall(getSkinTexture, orgRwTextureCreate, RwTextureCreate_SetLinearFilter);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_EXTRA_COMPONENT_ENVMAP
 	// Apply the environment mapping on extra components
 	try
 	{
@@ -3150,8 +3302,10 @@ void Patch_III_Common()
 		InterceptCall(setEnvironmentMap, CVehicleModelInfo::orgSetEnvironmentMap, &CVehicleModelInfo::SetEnvironmentMap_ExtraComps);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_EVASIVE_DIVE
 	// Fix the evasive dive miscalculating the angle, resulting in peds diving towards the vehicle
 	try
 	{
@@ -3163,8 +3317,10 @@ void Patch_III_Common()
 		InjectHook(setEvasiveDive.get<void>(1), &CalculateAngle_Hook, HookType::Call);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_DRIVER_SHOT_BEHAVIOR
 	// Fix probabilities in CVehicle::InflictDamage incorrectly assuming a random range from 0 to 100.000
 	try
 	{
@@ -3175,8 +3331,10 @@ void Patch_III_Common()
 		Patch<uint32_t>(probability_flee, 75000u * 32767u / 100000u);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_NULL_TERMINATED_PATH_LINES
 	// Null terminate read lines in CPlane::LoadPath and CTrain::ReadAndInterpretTrackFile
 	try
 	{
@@ -3197,8 +3355,10 @@ void Patch_III_Common()
 		InjectHook(readTrackFile2.get<void>(2), ReadTrackFile_Terminate, HookType::Call);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_STATS_MENU_FONT_10
 	// Backport 1.1 Stats menu font fix to 1.0
 	try
 	{
@@ -3212,8 +3372,10 @@ void Patch_III_Common()
 		InterceptCall(constructStatLine.get<void>(), orgConstructStatLine, ConstructStatLine_SetFontStyle);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_DODO_KEYBOARD_CHEAT
 	// Enable Dodo keyboard controls for all cars when the flying cars cheat is enabled
 	try
 	{
@@ -3226,8 +3388,10 @@ void Patch_III_Common()
 		InterceptCall(findPlayerVehicle, orgFindPlayerVehicle, FindPlayerVehicle_DodoCheck);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ANY_VARIABLE_RESETS
 	// Reset variables on New Game
 	try
 	{
@@ -3239,8 +3403,11 @@ void Patch_III_Common()
 			get_pattern("C6 05 ? ? ? ? ? E8 ? ? ? ? C7 05", 7)
 		};
 
+#if ENABLE_FIX_TIMERS_RESET_NEW_GAME
 		TimerInitialise = reinterpret_cast<decltype(TimerInitialise)>(get_pattern("83 E4 F8 68 ? ? ? ? E8", -6));
+#endif
 
+#if ENABLE_FIX_AUDIO_ENTITIES_NEW_GAME
 		// In GTA III, we also need to backport one more fix from VC to avoid issues with looping audio entities:
 		// CMenuManager::DoSettingsBeforeStartingAGame needs to call cDMAudio::DestroyAllGameCreatedEntities
 		DestroyAllGameCreatedEntities = reinterpret_cast<decltype(DestroyAllGameCreatedEntities)>(ReadCallFrom(
@@ -3251,19 +3418,28 @@ void Patch_III_Common()
 			audio_service.get(0).get<void>(5),
 			audio_service.get(1).get<void>(5),
 		};
+#endif
 
 		InterceptCall(game_initialise, orgGameInitialise, GameInitialise);
 		HookEach_ReInitGameObjectVariables(reinit_game_object_variables, InterceptCall);
+#if ENABLE_FIX_AUDIO_ENTITIES_NEW_GAME
 		HookEach_Service(audio_service_instances, InterceptCall);
+#endif
 
 		// Variables to reset
+#if ENABLE_FIX_FREE_RESPRAYS_NEW_GAME
 		GameVariablesToReset.emplace_back(*get_pattern<bool*>("80 3D ? ? ? ? ? 74 2A", 2)); // Free resprays
+#endif
+#if ENABLE_FIX_EMERGENCY_DISPATCH_TIMERS_NEW_GAME
 		GameVariablesToReset.emplace_back(*get_pattern<int*>("7D 72 A1 ? ? ? ? 05", 2 + 1)); // LastTimeAmbulanceCreated
 		GameVariablesToReset.emplace_back(*get_pattern<int*>("74 7F A1 ? ? ? ? 05", 2 + 1)); // LastTimeFireTruckCreated
+#endif
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TEMP_PICKUP_CLEANUP
 	// Clean up the pickup object when reusing a temporary slot
 	try
 	{
@@ -3275,8 +3451,10 @@ void Patch_III_Common()
 		InterceptCall(give_us_a_pick_up_object.get<void>(2), orgGiveUsAPickUpObject, GiveUsAPickUpObject_CleanUpObject);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CLAUDE_SIT_IN_SPEEDER
 	// Sitting in boat (Speeder), implemented as a special vehicle feature
 	// Based off SitInBoat from Fire_Head, with extra improvements
 	try
@@ -3300,8 +3478,10 @@ void Patch_III_Common()
 		InjectHook(finish_callback, FinishCallback_CallImmediately);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_DETACHED_LIMBS_LODS
 	// Copy the atomic render CB in CloneAtomicToFrameCB instead of overriding it
 	// Fixes detached limbs rendering the normal and LOD atomics together
 	try
@@ -3310,8 +3490,10 @@ void Patch_III_Common()
 		Nop(set_render_cb, 5);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_STEAM_CAR_REFLECTIONS
 	// Fix dark car reflections in the Steam EXE
 	// Based off Sergeanur's fix
 	try
@@ -3324,8 +3506,10 @@ void Patch_III_Common()
 		Nop(reflection.get<void>(2), 3);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_FBI_KURUMA_COLOR
 	// Don't override the color of the FBI car
 	try
 	{
@@ -3333,8 +3517,10 @@ void Patch_III_Common()
 		Patch<uint8_t>(spawn_one_car, 0xEB);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_BRIGHTNESS_SAVING
 	// Fixed Brightness saving (fixed in VC)
 	try
 	{
@@ -3362,13 +3548,16 @@ void Patch_III_Common()
 		InterceptCall(write, orgWrite, Write_Brightness);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING || ENABLE_FIX_CREDITS_SCALING || ENABLE_FIX_MENU_QUESTION_TEXT_SCALING || ENABLE_FIX_TEXT_SHADOW_SCALING
 	// Fixed most line wraps not scaling to resolution
 	// Shared namespace, but separate patch applications per-function
 	{
 		using namespace FixedLineWraps;
 
+#if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
 		// CMenuManager::Draw
 		try
 		{
@@ -3386,7 +3575,9 @@ void Patch_III_Common()
 			MenuManager::HookEach_Draw_Left(left_align, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
 		// CMenuManager::DrawPlayerSetupScreen & CMenuManager::DrawControllerSetupScreen
 		try
 		{
@@ -3405,7 +3596,9 @@ void Patch_III_Common()
 			MenuManager::HookEach_DrawPlayerSetupScreen_Left(left_align, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 		// CFont::Initialise
 		try
 		{
@@ -3425,7 +3618,9 @@ void Patch_III_Common()
 			Font::HookEach_Initialise_FullWidth(initialise_wrap, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 		// CDarkel::DrawMessages
 		try
 		{
@@ -3437,7 +3632,9 @@ void Patch_III_Common()
 			Darkel::HookEach_DrawMessages_Right(set_centre_size, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 		// CGarages::PrintMessages
 		try
 		{
@@ -3448,7 +3645,9 @@ void Patch_III_Common()
 			Garages::HookEach_PrintMessages_Right(set_centre_size, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_CREDITS_SCALING
 		// CCredits::Render
 		try
 		{
@@ -3459,7 +3658,9 @@ void Patch_III_Common()
 			FixedLineWraps::Credits::HookEach_Render_Right(set_centre_size, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
 		// LoadingIslandScreen
 		try
 		{
@@ -3470,7 +3671,9 @@ void Patch_III_Common()
 			LoadingIslandScreen::HookEach_Display_Left(set_right_justify_wrap, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
 		// CReplay::Display
 		try
 		{
@@ -3481,9 +3684,12 @@ void Patch_III_Common()
 			FixedLineWraps::Replay::HookEach_Display_Right(set_centre_size, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 	}
+#endif
 
 
+#if ENABLE_FIX_WEAPON_ICON_RENDERING
 	// Fixed weapon icons being off by a pixel in the top left corner, and not always using linear filtering
 	try
 	{
@@ -3494,8 +3700,10 @@ void Patch_III_Common()
 		InterceptCall(draw_sprite, orgDrawSprite, DrawSprite_Linear);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ENGINE_START_SOUND
 	// Fixed one-shot sounds playing at a wrong position if the previous one-shot played with reflection (backport from Vice City, found by Sergeanur)
 	try
 	{
@@ -3506,8 +3714,10 @@ void Patch_III_Common()
 		InterceptCall(add_reflections, orgAddReflectionsToRequestedQueue, AddReflectionsToRequestedQueue_SavePosition);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_FLARE_SCALING
 	// Corona flares not scaling to resolution
 	try
 	{
@@ -3518,8 +3728,10 @@ void Patch_III_Common()
 		InterceptCall(render_one_flare_sprite, orgRenderOneXLUSprite, RenderOneXLUSprite_Scale);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_SPAWN_RANDOMNESS_16BIT
 	// Fix various randomness factors expecting 16-bit rand()
 	{
 		using namespace ConsoleRandomness;
@@ -3532,8 +3744,10 @@ void Patch_III_Common()
 		}
 		TXN_CATCH();
 	}
+#endif
 
 
+#if ENABLE_FIX_ROTATED_OBJECT_SHADOWS
 	// Fix CShadows::CastShadowEntityXY ignoring the Up rotation of an object
 	if (bSSESupported) try
 	{
@@ -3549,8 +3763,10 @@ void Patch_III_Common()
 		InjectHook(cast_shadow_entity.get<void>(21), cast_shadow_entity_end, HookType::Jump);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CLEAR_MISSION_AUDIO
 	// Stop the mission audio on CLEAR_MISSION_AUDIO, like in Vice City
 	try
 	{
@@ -3570,8 +3786,10 @@ void Patch_III_Common()
 		InjectHook(clear_mission_audio_prologue, StopStreamedFileStub, HookType::Jump);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_HIDDEN_PACKAGES_STATS
 	// Display the actual number of hidden packages in Stats instead of a faux percentage value
 	try
 	{
@@ -3589,8 +3807,10 @@ void Patch_III_Common()
 		Nop(total_packages.get<void>(0), 8);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_SCRIPT_SPRITE_FILTER
 	// Apply bilinear filtering on script sprites and scale them to resolution
 	try
 	{
@@ -3606,6 +3826,7 @@ void Patch_III_Common()
 		HookEach_Bilinear_Sprite2d(sprite2d_draw, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)

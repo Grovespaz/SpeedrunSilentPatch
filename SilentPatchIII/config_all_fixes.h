@@ -1,0 +1,3 @@
+#pragma once
+
+#define SILENTPATCHIII_FEATURE_DEFAULT 1

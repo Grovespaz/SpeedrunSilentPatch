@@ -95,6 +95,15 @@
     <ClInclude Include="ModelInfoIII.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SilentPatchFeatureConfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="config_all_fixes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="config_speedrun.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\SilentPatch\SVF.h">
       <Filter>Header Files</Filter>
     </ClInclude>

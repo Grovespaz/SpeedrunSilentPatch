@@ -81,7 +81,10 @@
     <ClInclude Include="..\SilentPatch\Timer.h" />
     <ClInclude Include="..\SilentPatch\Utils\MemoryMgr.h" />
     <ClInclude Include="..\SilentPatch\Utils\Patterns.h" />
+    <ClInclude Include="config_all_fixes.h" />
+    <ClInclude Include="config_speedrun.h" />
     <ClInclude Include="ModelInfoIII.h" />
+    <ClInclude Include="SilentPatchFeatureConfig.h" />
     <ClInclude Include="VehicleIII.h" />
   </ItemGroup>
   <ItemGroup>
@@ -130,7 +133,12 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="versionmeta.props" />
   </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="UserMacros">
+    <SilentPatchFeatureSet>Speedrun</SilentPatchFeatureSet>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SilentPatchFeatureDefinitions Condition="'$(SilentPatchFeatureSet)'=='Speedrun'">SILENTPATCH_SPEEDRUN;</SilentPatchFeatureDefinitions>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetExt>.asi</TargetExt>
     <TargetName>SilentPatchIII</TargetName>
@@ -148,7 +156,7 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SILENTPATCH_SPEEDRUN=1;$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(RWG33SDK)\include\d3d8;..\SilentPatch;..\SilentPatchIII;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>StdAfx.h</PrecompiledHeaderFile>
@@ -179,7 +187,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SILENTPATCH_SPEEDRUN=1;$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(RWG33SDK)\include\d3d8;..\SilentPatch;..\SilentPatchIII;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>StdAfx.h</PrecompiledHeaderFile>
@@ -212,7 +220,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>SILENTPATCH_SPEEDRUN=1;$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(RWG33SDK)\include\d3d8;..\SilentPatch;..\SilentPatchIII;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>StdAfx.h</PrecompiledHeaderFile>
