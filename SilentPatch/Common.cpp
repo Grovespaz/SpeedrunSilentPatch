@@ -1,6 +1,6 @@
 #include "Common.h"
 
-#if defined(_GTA_III)
+#if defined(_GTA_III) || defined(_GTA_VC)
 #include "SilentPatchFeatureConfig.h"
 #endif
 
@@ -202,7 +202,7 @@ namespace Common {
 
 			const bool HasRwD3D8 = RWGTA::Patches::TryLocateRwD3D8();
 
-#if !defined(_GTA_III) || ENABLE_SUPPORT_DELAYED_PATCHING
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_SUPPORT_DELAYED_PATCHING
 			// Delayed patching
 			try
 			{
@@ -221,7 +221,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_BOMBS_SAVING
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_BOMBS_SAVING
 			// Fixed bomb ownership/bombs saving for bikes
 			try
 			{
@@ -234,7 +234,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_HANDLING_NAME_MATCHING
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_HANDLING_NAME_MATCHING
 			// Fixed handling.cfg name matching (names don't need unique prefixes anymore)
 			try
 			{
@@ -249,7 +249,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_CORONA_LINES
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_CORONA_LINES
 			// Fixed corona lines rendering on non-nvidia cards
 			try
 			{
@@ -263,7 +263,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_PICKUP_LIGHT_GLOWS
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_PICKUP_LIGHT_GLOWS
 			// Fixed static shadows not rendering under fire and pickups
 			if (HasRwD3D8) try
 			{
@@ -298,7 +298,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_LIGHTLESS_TAXIS
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_LIGHTLESS_TAXIS
 			// Reset requested extras if created vehicle has no extras
 			try
 			{
@@ -312,7 +312,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_TRAFFIC_LIGHT_PROBABILITY
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_TRAFFIC_LIGHT_PROBABILITY
 			// Rescale light switching randomness in CAutomobile::PreRender/CBike::PreRender for PC the randomness range
 			// The original randomness was 50000 out of 65535, which is impossible to hit with PC's 32767 range
 			try
@@ -335,13 +335,13 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_SCRIPT_RANDOMNESS_16BIT || ENABLE_FIX_PED_CHAT_RANDOMNESS_16BIT || ENABLE_FIX_SPAWN_RANDOMNESS_16BIT
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_SCRIPT_RANDOMNESS_16BIT || ENABLE_FIX_PED_CHAT_RANDOMNESS_16BIT || ENABLE_FIX_SPAWN_RANDOMNESS_16BIT
 			// Fix various randomness factors expecting 16-bit rand()
 			{
 				// Treat each instance separately
 				using namespace ConsoleRandomness;
 
-#if !defined(_GTA_III) || ENABLE_FIX_SCRIPT_RANDOMNESS_16BIT
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_SCRIPT_RANDOMNESS_16BIT
 				// Script randomness
 				try
 				{
@@ -358,7 +358,7 @@ namespace Common {
 				TXN_CATCH();
 #endif
 
-#if !defined(_GTA_III) || ENABLE_FIX_PED_CHAT_RANDOMNESS_16BIT
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_PED_CHAT_RANDOMNESS_16BIT
 				// CPed::Chat
 				try
 				{
@@ -375,7 +375,7 @@ namespace Common {
 				TXN_CATCH();
 #endif
 
-#if !defined(_GTA_III) || ENABLE_FIX_SPAWN_RANDOMNESS_16BIT
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_SPAWN_RANDOMNESS_16BIT
 				// CPathFind::NewGenerateCarCreationCoors
 				try
 				{
@@ -388,7 +388,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_PRINT_STRING_OVERREAD
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_PRINT_STRING_OVERREAD
 			// Fix PrintString over-reading strings by one character
 			try
 			{
@@ -401,7 +401,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_GET_OUT_OF_JAIL_FREE_WEAPONS
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_GET_OUT_OF_JAIL_FREE_WEAPONS
 			// Do not remove weapons twice when the player is busted
 			// "Get out of jail free" now lets the player keep their weapons (once), as it was seemingly intended
 			try
@@ -418,11 +418,11 @@ namespace Common {
 			using namespace Memory;
 			using namespace hook::txn;
 
-#if !defined(_GTA_III) || ENABLE_FIX_EXTRA_COMPONENT_ENVMAP
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_EXTRA_COMPONENT_ENVMAP
 			ExtraCompSpecularity::ReadExtraCompSpecularityExceptions(wcModulePath);
 #endif
 
-#if !defined(_GTA_III) || ENABLE_FIX_VEHICLE_CORONA_FIXES
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_VEHICLE_CORONA_FIXES
 			// Corrected taxi light placement for Taxi
 			if ( GetPrivateProfileIntW(L"SilentPatch", L"EnableVehicleCoronaFixes", 0, wcModulePath) != 0 ) try
 			{
@@ -437,7 +437,7 @@ namespace Common {
 #endif
 
 
-#if !defined(_GTA_III) || ENABLE_FIX_USE_DESKTOP_REFRESH_RATE
+#if (!defined(_GTA_III) && !defined(_GTA_VC)) || ENABLE_FIX_USE_DESKTOP_REFRESH_RATE
 			// Make the game use the desktop refresh rate instead of a fixed 60Hz
 			if (GetPrivateProfileIntW(L"SilentPatch", L"UseDesktopRefreshRate", 0, wcModulePath) != 0) try
 			{

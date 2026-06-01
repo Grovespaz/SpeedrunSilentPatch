@@ -13,6 +13,7 @@
 #include "TheFLAUtils.h"
 #include "ParseUtils.hpp"
 #include "Random.h"
+#include "SilentPatchFeatureConfig.h"
 
 #include <array>
 #include <limits>
@@ -1980,6 +1981,7 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 	const HMODULE hGameModule = GetModuleHandle(nullptr);
 
 	const HMODULE skygfxModule = moduleList.Get(L"skygfx");
+#if ENABLE_FIX_EXTRA_COMPONENT_ENVMAP
 	if (skygfxModule != nullptr)
 	{
 		auto attachCarPipe = reinterpret_cast<void(*)(RwObject*)>(GetProcAddress(skygfxModule, "AttachCarPipeToRwObject"));
@@ -1988,7 +1990,9 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 			CVehicleModelInfo::AttachCarPipeToRwObject = attachCarPipe;
 		}
 	}
+#endif
 
+#if ENABLE_ENHANCEMENT_LOCALE_UNITS
 	// Locale based metric/imperial system INI/debug menu
 	{
 		using namespace Localization;
@@ -2001,8 +2005,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 			DebugMenuEntrySetWrap(e, true);
 		}
 	}
+#endif
 
 
+#if ENABLE_FIX_VEHICLE_CORONA_FIXES
 	// Corrected siren corona placement for emergency vehicles
 	if ( GetPrivateProfileIntW(L"SilentPatch", L"EnableVehicleCoronaFixes", 0, wcModulePath) != 0 )
 	{
@@ -2126,8 +2132,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		}
 		TXN_CATCH();
 	}
+#endif
 
 
+#if ENABLE_SUPPORT_FLA_UTILS || ENABLE_FIX_CONSTRUCTION_SITE_LOD
 	bool HasModelInfo = false;
 	// Register CBaseModelInfo::GetModelInfo for SVF so we can resolve model names
 	try
@@ -2144,8 +2152,12 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		HasModelInfo = true;
 	}
 	TXN_CATCH();
+#else
+	bool HasModelInfo = false;
+#endif
 
 
+#if ENABLE_FIX_CONSTRUCTION_SITE_LOD
 	// Fix the construction site LOD losing its HQ model and showing at all times
 	if (HasModelInfo) try
 	{
@@ -2160,8 +2172,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		HookEach_ReplaceWithNewModel(replaceWithNewModel, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_RADAR_DISC_SCALING
 	// Fix the radar disc shadow scaling and radar X position
 	try
 	{
@@ -2278,8 +2292,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	// Fix the onscreen counter bar placement and shadow not scaling to resolution
 	try
 	{
@@ -2310,8 +2326,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		InterceptCall(atoiWrap, orgAtoi, atoi_RecalculatePositions<XPositions.size(), YPositions.size()>);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_RADAR_TRACE_SCALING
 	// Fix the radar trace blip shadow not scaling to resolution
 	try
 	{
@@ -2352,8 +2370,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		PositionRecalculator<XPositions.size(), YPositions.size()>::HookEach_ShowRadarTraceWithHeight(showRadarTraceWithHeight_Patches, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	// Fix the loading bar outline not scaling to resolution
 	try
 	{
@@ -2376,8 +2396,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		InterceptCall(rgbaCtor, orgRGBACtor, RGBACtor_RecalculatePositions<XPositions.size(), YPositions.size()>);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CREDITS_SCALING
 	// Fix credits not scaling to resolution
 	try
 	{
@@ -2413,8 +2435,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_ENHANCEMENT_MINIMAL_HUD
 	// Minimal HUD
 	if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"MinimalHUD", -1, wcModulePath); INIoption != -1) try
 	{
@@ -2523,14 +2547,17 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MISSION_TEXT_DURATION || ENABLE_ENHANCEMENT_SLIDING_TEXTS
 	// Fix some big messages staying on screen longer at high resolutions due to a cut sliding text feature
 	// Also since we're touching it, optionally allow to re-enable this feature.
 	try
 	{
 		using namespace SlidingTextsScalingFixes;
 
+#if ENABLE_FIX_MISSION_TEXT_DURATION
 		// "Unscale" text sliding thresholds, so texts don't stay on screen longer at high resolutions
 		void* scalingThreshold[] = {
 			get_pattern("A1 ? ? ? ? 59 83 C0 EC", 1),
@@ -2541,7 +2568,9 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		{
 			Patch(addr, &FIXED_RES_WIDTH_SCALE);
 		}
+#endif
 
+#if ENABLE_ENHANCEMENT_SLIDING_TEXTS
 		// Optional sliding texts
 		if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"SlidingMissionTitleText", -1, wcModulePath); INIoption != -1) try
 		{
@@ -2583,10 +2612,13 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 			}
 		}
 		TXN_CATCH();
+#endif
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MISSION_TEXT_DURATION
 	// Fix CDarkel sliding text
 	try
 	{
@@ -2599,8 +2631,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		HookEach_PrintString(darkel_print_string, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TEXT_BOX_PADDING_SCALING
 	// Fix text background padding not scaling to resolution
 	try
 	{
@@ -2647,8 +2681,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		InterceptCall(setJustifyOff_helpBox, orgSetJustifyOff, SetJustifyOff_Recalculate<wrapxWidth.size()>);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_AMMUNATION_TEXT_SCALING
 	// Fix ammunation text (big message type 3) Y position offset not scaling to resolution
 	try
 	{
@@ -2663,8 +2699,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		InterceptCall(setDropColor, orgSetDropColor, SetDropColor_Scale<YOffset.size()>);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_RADAR_DISC_SCALING
 	// Fix "You are here" shadow not scaling to resolution
 	try
 	{
@@ -2689,8 +2727,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		InterceptCall(rgbaCtor, orgRGBACtor, RGBACtor_RecalculatePositions<XPositions.size(), YPositions.size()>);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_ENHANCEMENT_PROPERTY_RADAR_ICONS
 	// "Property" map blip
 	if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"ShowPropertyBlips", -1, wcModulePath); INIoption != -1) try
 	{
@@ -2716,8 +2756,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_BOAT_EXTRAS
 	// Add support for boat extras (Rio has one) + 'boat_moving_high' typo from Tropic
 	try
 	{
@@ -2756,8 +2798,10 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_SCRIPT_SPRITE_SCALING
 	// Apply bilinear filtering on script sprites and scale them to resolution
 	if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"ScaleScriptSprites", -1, wcModulePath); INIoption != -1) try
 	{
@@ -2785,8 +2829,11 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 		}
 	}
 	TXN_CATCH();
+#endif
 
+#if ENABLE_SUPPORT_FLA_UTILS
 	FLAUtils::Init(moduleList);
+#endif
 }
 
 void InjectDelayedPatches()
@@ -2800,11 +2847,13 @@ void InjectDelayedPatches()
 
 	const bool hasDebugMenu = DebugMenuLoad();
 
+#if ENABLE_FIX_BACKFACE_CULLING
 	SelectableBackfaceCulling::ReadDrawBackfacesExclusions(wcModulePath);
 	if (hasDebugMenu)
 	{
 		DebugMenuAddVar("SilentPatch", "Force backface culling off", &SelectableBackfaceCulling::bForceDisableBFC, nullptr);
 	}
+#endif
 
 	InjectDelayedPatches_VC_Common( hasDebugMenu, wcModulePath );
 
@@ -2817,8 +2866,11 @@ void Patch_VC_10(uint32_t width, uint32_t height)
 
 	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x602D32);
 
+#if ENABLE_FIX_WET_ROAD_REFLECTIONS
 	InjectHook(0x5433BD, FixedRefValue);
+#endif
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	{
 		using namespace PrintStringShadows;
 		using namespace UIScales;
@@ -2826,16 +2878,22 @@ void Patch_VC_10(uint32_t width, uint32_t height)
 		XY<0x5FA1F6, 0x5FA1D5, MusicManager>::Hook(0x5FA1FD);
 		XMinus<0x544727/*, 0x544727*/, Stuff2d>::Hook(0x54474D); // Don't patch Y as we're doing it in the credits scale fix
 	}
+#endif
 
+#if ENABLE_FIX_MOUSE_MENU_LOCKUP
 	// Mouse fucking fix!
 	Patch<DWORD>(0x601740, 0xC3C030);
+#endif
 
+#if ENABLE_FIX_PRECISE_FRAME_LIMITER
 	// (Hopefully) more precise frame limiter
 	ReadCall( 0x6004A2, RsEventHandler );
 	InjectHook(0x6004A2, NewFrameRender);
 	InjectHook(0x600449, GetTimeSinceLastFrame);
+#endif
 
 
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
 	ReadCall( 0x4A5E45, orgConstructRenderList );
 	InjectHook(0x4A5E45, ResetMousePos);
@@ -2843,7 +2901,9 @@ void Patch_VC_10(uint32_t width, uint32_t height)
 	// New wndproc
 	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x601727);
 	Patch(0x601727, &pCustomWndProc);
+#endif
 
+#if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
 	// Y axis sensitivity fix
 	// By ThirteenAG
 	float* sens = *(float**)DynBaseAddress(0x4796E5);
@@ -2852,17 +2912,23 @@ void Patch_VC_10(uint32_t width, uint32_t height)
 	Patch<const void*>(0x47AE27 + 0x1CC + 0x2, sens);
 	Patch<const void*>(0x47BE8F + 0x22E + 0x2, sens);
 	Patch<const void*>(0x481AB3 + 0x4FE + 0x2, sens);
+#endif
 
+#if ENABLE_FIX_MOUSE_Y_AXIS_FADEIN
 	// Don't lock mouse Y axis during fadeins
 	Patch<BYTE>(0x47C11E, 0xEB);
 	Patch<BYTE>(0x47CD94, 0xEB);
 	Nop(0x47C15A, 2);
+#endif
 
+#if ENABLE_FIX_AB_DRIVE_CD_CHECK
 	// Scan for A/B drives looking for audio files
 	Patch<DWORD>(0x5D7941, 'A');
 	Patch<DWORD>(0x5D7B04, 'A');
+#endif
 
 
+#if ENABLE_FIX_MAP_LEGEND_BLIP_OUTLINE
 	// ~x~ as cyan blip
 	// Shared with GInput
 	Patch<BYTE>(0x550481, 0);
@@ -2872,18 +2938,25 @@ void Patch_VC_10(uint32_t width, uint32_t height)
 	Patch<BYTE>(0x5505FF, 0);
 	Patch<BYTE>(0x550603, 255);
 	Patch<BYTE>(0x550607, 255);
+#endif
 
 
+#if ENABLE_FIX_CRIME_CODES
 	// Corrected crime codes
 	Patch<DWORD>(0x5FDDDB, 0xC5);
+#endif
 
 
+#if ENABLE_FIX_MELEE_CHEAT_AMMO
 	// Fixed ammo for melee weapons in cheats
 	Patch<BYTE>(0x4AED14+1, 1); // katana
 	Patch<BYTE>(0x4AEB74+1, 1); // chainsaw
+#endif
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// Fixed crash related to autopilot timing calculations
 	InjectHook(0x418FAE, AutoPilotTimerFix_VC, HookType::Jump);
+#endif
 
 	Common::Patches::DDraw_VC_10( width, height, aNoDesktopMode );
 }
@@ -2894,8 +2967,11 @@ void Patch_VC_11(uint32_t width, uint32_t height)
 
 	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x602D12);
 
+#if ENABLE_FIX_WET_ROAD_REFLECTIONS
 	InjectHook(0x5433DD, FixedRefValue);
+#endif
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	{
 		using namespace PrintStringShadows;
 		using namespace UIScales;
@@ -2903,15 +2979,21 @@ void Patch_VC_11(uint32_t width, uint32_t height)
 		XY<0x5FA216, 0x5FA1F5, MusicManager>::Hook(0x5FA21D);
 		XMinus<0x544747/*, 0x544747*/, Stuff2d>::Hook(0x54476D); // Don't patch Y as we're doing it in the credits scale fix
 	}
+#endif
 
+#if ENABLE_FIX_MOUSE_MENU_LOCKUP
 	// Mouse fucking fix!
 	Patch<DWORD>(0x601770, 0xC3C030);
+#endif
 
+#if ENABLE_FIX_PRECISE_FRAME_LIMITER
 	// (Hopefully) more precise frame limiter
 	ReadCall( 0x6004C2, RsEventHandler );
 	InjectHook(0x6004C2, NewFrameRender);
 	InjectHook(0x600469, GetTimeSinceLastFrame);
+#endif
 
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
 	ReadCall( 0x4A5E65, orgConstructRenderList );
 	InjectHook(0x4A5E65, ResetMousePos);
@@ -2919,7 +3001,9 @@ void Patch_VC_11(uint32_t width, uint32_t height)
 	// New wndproc
 	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x601757);
 	Patch(0x601757, &pCustomWndProc);
+#endif
 
+#if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
 	// Y axis sensitivity fix
 	// By ThirteenAG
 	float* sens = *(float**)DynBaseAddress(0x4796E5);
@@ -2928,17 +3012,23 @@ void Patch_VC_11(uint32_t width, uint32_t height)
 	Patch<const void*>(0x47AE27 + 0x1CC + 0x2, sens);
 	Patch<const void*>(0x47BE8F + 0x22E + 0x2, sens);
 	Patch<const void*>(0x481AB3 + 0x4FE + 0x2, sens);
+#endif
 
+#if ENABLE_FIX_MOUSE_Y_AXIS_FADEIN
 	// Don't lock mouse Y axis during fadeins
 	Patch<BYTE>(0x47C11E, 0xEB);
 	Patch<BYTE>(0x47CD94, 0xEB);
 	Nop(0x47C15A, 2);
+#endif
 
+#if ENABLE_FIX_AB_DRIVE_CD_CHECK
 	// Scan for A/B drives looking for audio files
 	Patch<DWORD>(0x5D7961, 'A');
 	Patch<DWORD>(0x5D7B24, 'A');
+#endif
 
 
+#if ENABLE_FIX_MAP_LEGEND_BLIP_OUTLINE
 	// ~x~ as cyan blip
 	// Shared with GInput
 	Patch<BYTE>(0x5504A1, 0);
@@ -2948,18 +3038,25 @@ void Patch_VC_11(uint32_t width, uint32_t height)
 	Patch<BYTE>(0x55061F, 0);
 	Patch<BYTE>(0x550623, 255);
 	Patch<BYTE>(0x550627, 255);
+#endif
 
 
+#if ENABLE_FIX_CRIME_CODES
 	// Corrected crime codes
 	Patch<DWORD>(0x5FDDFB, 0xC5);
+#endif
 
 
+#if ENABLE_FIX_MELEE_CHEAT_AMMO
 	// Fixed ammo for melee weapons in cheats
 	Patch<BYTE>(0x4AED34+1, 1); // katana
 	Patch<BYTE>(0x4AEB94+1, 1); // chainsaw
+#endif
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// Fixed crash related to autopilot timing calculations
 	InjectHook(0x418FAE, AutoPilotTimerFix_VC, HookType::Jump);
+#endif
 
 	Common::Patches::DDraw_VC_11( width, height, aNoDesktopMode );
 }
@@ -2970,8 +3067,11 @@ void Patch_VC_Steam(uint32_t width, uint32_t height)
 
 	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x602952);
 
+#if ENABLE_FIX_WET_ROAD_REFLECTIONS
 	InjectHook(0x5432AD, FixedRefValue);
+#endif
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	{
 		using namespace PrintStringShadows;
 		using namespace UIScales;
@@ -2979,15 +3079,21 @@ void Patch_VC_Steam(uint32_t width, uint32_t height)
 		XY<0x5F9E56, 0x5F9E35, MusicManager>::Hook(0x5F9E5D);
 		XMinus<0x544617/*, 0x544617*/, Stuff2d>::Hook(0x54463D); // Don't patch Y as we're doing it in the credits scale fix
 	}
+#endif
 
+#if ENABLE_FIX_MOUSE_MENU_LOCKUP
 	// Mouse fucking fix!
 	Patch<DWORD>(0x6013B0, 0xC3C030);
+#endif
 
+#if ENABLE_FIX_PRECISE_FRAME_LIMITER
 	// (Hopefully) more precise frame limiter
 	ReadCall( 0x600102, RsEventHandler );
 	InjectHook(0x600102, NewFrameRender);
 	InjectHook(0x6000A9, GetTimeSinceLastFrame);
+#endif
 
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
 	ReadCall( 0x4A5D15, orgConstructRenderList );
 	InjectHook(0x4A5D15, ResetMousePos);
@@ -2995,7 +3101,9 @@ void Patch_VC_Steam(uint32_t width, uint32_t height)
 	// New wndproc
 	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x601397);
 	Patch(0x601397, &pCustomWndProc);
+#endif
 
+#if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
 	// Y axis sensitivity fix
 	// By ThirteenAG
 	float* sens = *(float**)DynBaseAddress(0x4795C5);
@@ -3004,16 +3112,22 @@ void Patch_VC_Steam(uint32_t width, uint32_t height)
 	Patch<const void*>(0x47AD07 + 0x1CC + 0x2, sens);
 	Patch<const void*>(0x47BD6F + 0x22E + 0x2, sens);
 	Patch<const void*>(0x481993 + 0x4FE + 0x2, sens);
+#endif
 
+#if ENABLE_FIX_MOUSE_Y_AXIS_FADEIN
 	// Don't lock mouse Y axis during fadeins
 	Patch<BYTE>(0x47BFFE, 0xEB);
 	Patch<BYTE>(0x47CC74, 0xEB);
 	Nop(0x47C03A, 2);
+#endif
 
+#if ENABLE_FIX_AB_DRIVE_CD_CHECK
 	// Scan for A/B drives looking for audio files
 	Patch<DWORD>(0x5D7764, 'A');
+#endif
 
 
+#if ENABLE_FIX_MAP_LEGEND_BLIP_OUTLINE
 	// ~x~ as cyan blip
 	// Shared with GInput
 	Patch<BYTE>(0x550371, 0);
@@ -3023,18 +3137,25 @@ void Patch_VC_Steam(uint32_t width, uint32_t height)
 	Patch<BYTE>(0x5504EF, 0);
 	Patch<BYTE>(0x5504F3, 255);
 	Patch<BYTE>(0x5504F7, 255);
+#endif
 
 
+#if ENABLE_FIX_CRIME_CODES
 	// Corrected crime codes
 	Patch<DWORD>(0x5FDA3B, 0xC5);
+#endif
 
 
+#if ENABLE_FIX_MELEE_CHEAT_AMMO
 	// Fixed ammo for melee weapons in cheats
 	Patch<BYTE>(0x4AEA44+1, 1); // katana
 	Patch<BYTE>(0x4AEBE4+1, 1); // chainsaw
+#endif
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// Fixed crash related to autopilot timing calculations
 	InjectHook(0x418FAE, AutoPilotTimerFix_VC, HookType::Jump);
+#endif
 
 	Common::Patches::DDraw_VC_Steam( width, height, aNoDesktopMode );
 }
@@ -3043,6 +3164,7 @@ void Patch_VC_JP()
 {
 	using namespace Memory::DynBase;
 
+#if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
 	// Y axis sensitivity fix
 	// By ThirteenAG
 	Patch<DWORD>(0x4797E7 + 0x2E0 + 0x2, 0x94ABD8);
@@ -3050,6 +3172,7 @@ void Patch_VC_JP()
 	Patch<DWORD>(0x47B1FE + 0x1CC + 0x2, 0x94ABD8);
 	Patch<DWORD>(0x47C266 + 0x22E + 0x2, 0x94ABD8);
 	Patch<DWORD>(0x481E8A + 0x4FE + 0x2, 0x94ABD8);
+#endif
 }
 
 void Patch_VC_Common()
@@ -3064,6 +3187,7 @@ void Patch_VC_Common()
 
 	const HMODULE hGameModule = GetModuleHandle(nullptr);
 
+#if ENABLE_FIX_TEXT_SHADOW_SCALING
 	// Fix text shadows not scaling to resolution
 	try
 	{
@@ -3088,8 +3212,10 @@ void Patch_VC_Common()
 		HookEach_AdjustSlantAndShadow(print_string_slant_hooks, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// New timers fix
 	try
 	{
@@ -3100,8 +3226,10 @@ void Patch_VC_Common()
 		InjectHook( hookPoint.get<void>( 0x21 + 5 ), jmpPoint, HookType::Jump );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// Don't reset audio timers in CTimer::Initialise as that interferes with the teardown
 	try
 	{
@@ -3116,8 +3244,10 @@ void Patch_VC_Common()
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ALT_F4
 	// Alt+F4
 	try
 	{
@@ -3129,8 +3259,10 @@ void Patch_VC_Common()
 		});
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CAR_PANELS_DAMAGE
 	// Proper panels damage
 	try
 	{
@@ -3144,8 +3276,10 @@ void Patch_VC_Common()
 		Nop( addr.get<void>( 0x33 ), 7 );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_METRIC_IMPERIAL_CONSTANTS
 	// Proper metric-imperial conversion constants
 	try
 	{
@@ -3160,8 +3294,10 @@ void Patch_VC_Common()
 		Patch<const void*>( sum, &METERS_TO_MILES );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CAR_CHASE_PATHFINDING
 	// Improved pathfinding in PickNextNodeAccordingStrategy - PickNextNodeToChaseCar with XYZ coords
 	try
 	{
@@ -3197,8 +3333,10 @@ void Patch_VC_Common()
 		Patch<uint8_t>( addr.get<void>( 0x4B + 2 ), 0xC );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_ENHANCEMENT_NO_CENSORSHIP
 	// No censorships
 	try
 	{
@@ -3206,8 +3344,10 @@ void Patch_VC_Common()
 		Patch( addr, { 0x83, 0xC4, 0x08, 0x5B, 0xC3 } );	// add     esp, 8 \ pop ebx \ retn
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CARGEN_COUNTERS
 	// 014C cargen counter fix (by spaceeinstein)
 	try
 	{
@@ -3217,8 +3357,10 @@ void Patch_VC_Common()
 		Patch<uint8_t>( do_processing.get<uint8_t*>(7), 0x74 ); // jge -> jz
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ZERO_AMMO_SCM
 	// Fixed ammo from SCM
 	try
 	{
@@ -3231,8 +3373,10 @@ void Patch_VC_Common()
 		HookEach_GiveWeapon(give_weapon, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_BIKE_EXTRAS
 	// Extras working correctly on bikes
 	try
 	{
@@ -3240,8 +3384,10 @@ void Patch_VC_Common()
 		InjectHook( createInstance, CreateInstance_BikeFix, HookType::Call );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_SUPPORT_FLA_UTILS
 	// Credits =)
 	try
 	{
@@ -3252,8 +3398,10 @@ void Patch_VC_Common()
 		InjectHook( renderCredits.get<void>( -5 ), Credits::PrintSPCredits );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_KEYBOARD_LATENCY
 	// Decreased keyboard input latency
 	try
 	{
@@ -3272,8 +3420,10 @@ void Patch_VC_Common()
 		InjectHook( updatePads.get<void>( 9 ), jmpDest, HookType::Jump );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_ENHANCEMENT_LOCALE_UNITS
 	// Locale based metric/imperial system
 	try
 	{
@@ -3291,8 +3441,10 @@ void Patch_VC_Common()
 		Nop( constructStatLine.get<void>( -2 ), 2 );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_FBI_WASHINGTON_SIREN_SOUND
 	// Corrected FBI Washington sirens sound
 	// Primary siren lower pitched like in FBI Rancher and secondary siren higher pitched
 	try
@@ -3330,8 +3482,10 @@ void Patch_VC_Common()
 		TXN_CATCH();
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_EXTRA6_RANDOM_EXTRA
 	// Allow extra6 to be picked with component rule 4 (any)
 	try
 	{
@@ -3341,8 +3495,10 @@ void Patch_VC_Common()
 		Patch( extraMult6, &MULT_6 );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_DRIVEBY_SOUNDS
 	// Make drive-by one shot sounds owned by the driver instead of the car
 	// Fixes incorrect weapon sound being used for drive-by
 	try
@@ -3356,8 +3512,10 @@ void Patch_VC_Common()
 		InjectHook( getDriverOneShot.get<void>( -5 ), &CVehicle::GetOneShotOwnerID_SilentPatch, HookType::Call );
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_DOUBLE_EXPLOSION
 	// Fixed vehicles exploding twice if the driver leaves the car while it's exploding
 	try
 	{
@@ -3379,8 +3537,10 @@ void Patch_VC_Common()
 		Nop(pedSetOutCar, 3);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_EXTRA_COMPONENT_ENVMAP
 	// Apply the environment mapping on extra components
 	try
 	{
@@ -3398,8 +3558,10 @@ void Patch_VC_Common()
 		RpMatFXMaterialGetEffects = getEffects;
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_DRIVER_SHOT_BEHAVIOR
 	// Fix probabilities in CVehicle::InflictDamage incorrectly assuming a random range from 0 to 100.000
 	try
 	{
@@ -3408,8 +3570,10 @@ void Patch_VC_Common()
 		Patch<uint16_t>(probability, 35000u / 2u);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_NULL_TERMINATED_PATH_LINES
 	// Null terminate read lines in CPlane::LoadPath
 	try
 	{
@@ -3420,8 +3584,10 @@ void Patch_VC_Common()
 		InterceptCall(loadPath, orgSscanf_LoadPath, sscanf1_LoadPath_Terminate);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MOUSE_SENSITIVITY_NEW_GAME
 	// Don't reset mouse sensitivity on New Game
 	try
 	{
@@ -3437,8 +3603,10 @@ void Patch_VC_Common()
 		InterceptCall(camera_ctor_init, orgCtorCameraInit, CtorCameraInit_InitSensitivity);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_PICKUP_EFFECTS
 	// Fixed pickup effects
 	try
 	{
@@ -3455,8 +3623,10 @@ void Patch_VC_Common()
 		InjectHook(minigun2Glow, &PickUpEffects_Minigun2Glow, HookType::Call);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MUZZLE_FLASH_DIRECTION
 	// Fixed the muzzle flash facing the wrong direction
 	// By Wesser
 	try
@@ -3469,8 +3639,10 @@ void Patch_VC_Common()
 		Patch(fireInstantHit.get<void>(30), { 0xD9, 0xEE, 0x90, 0x90 });
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_CLASSIC_CONTROLS_TARGETING
 	// Fixed IS_PLAYER_TARGETTING_CHAR incorrectly detecting targetting in Classic controls
 	// when the player is not aiming
 	// By Wesser
@@ -3493,8 +3665,10 @@ void Patch_VC_Common()
 		InjectHook(isPlayerTargettingChar.get<void>(5), IsPlayerTargettingChar_ExtraChecks, HookType::Call);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ROSENBERG_AUDIO_RANDOMNESS
 	// Use PS2 randomness for Rosenberg audio to hopefully bring the odds closer to PS2
 	// The functionality was never broken on PC - but the random distribution seemingly made it looks as if it was
 	try
@@ -3505,8 +3679,10 @@ void Patch_VC_Common()
 		InjectHook(busted_audio_rand, rand15);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ANY_VARIABLE_RESETS
 	// Reset variables on New Game
 	try
 	{
@@ -3524,14 +3700,22 @@ void Patch_VC_Common()
 		HookEach_ReInitGameObjectVariables(reinit_game_object_variables, InterceptCall);
 
 		// Variables to reset
+#if ENABLE_FIX_FREE_RESPRAYS_NEW_GAME
 		GameVariablesToReset.emplace_back(*get_pattern<bool*>("7D 09 80 3D ? ? ? ? ? 74 32", 2 + 2)); // Free resprays
+#endif
+#if ENABLE_FIX_EMERGENCY_DISPATCH_TIMERS_NEW_GAME
 		GameVariablesToReset.emplace_back(*get_pattern<int*>("7D 78 A1 ? ? ? ? 05", 2 + 1)); // LastTimeAmbulanceCreated
 		GameVariablesToReset.emplace_back(*get_pattern<int*>("A1 ? ? ? ? 05 ? ? ? ? 39 05 ? ? ? ? 0F 86 ? ? ? ? 8B 15", 1)); // LastTimeFireTruckCreated
+#endif
+#if ENABLE_FIX_AFTER_RAIN_TIMER_NEW_GAME
 		GameVariablesToReset.emplace_back(*get_pattern<int*>("FF 0D ? ? ? ? EB 15 90", 2)); // CWeather::StreamAfterRainTimer
+#endif
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_PED_SPEECH
 	// Ped speech fix
 	// Based off Sergeanur's fix
 	try
@@ -3551,8 +3735,10 @@ void Patch_VC_Common()
 		Nop(comment_delay_id2.get<void>(3), 4);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_BACKFACE_CULLING
 	// Disabled backface culling on detached car parts, peds and specific models
 	try
 	{
@@ -3571,8 +3757,10 @@ void Patch_VC_Common()
 		InjectHook(entity_render.get<void>(-7), EntityRender_BackfaceCulling, HookType::Jump);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_OUTRO_SPLASH_DURATION
 	// Correct the duration of the outro splash to 2.5 seconds
 	// The outro splash displays for 150 ticks from the moment it fully fades in, with the tick cpimt supposedly incrementing every 10ms
 	// However, since the game is locked to 30FPS, the tick count actually increments every 33.3ms, so the splash takes around 5s
@@ -3600,8 +3788,10 @@ void Patch_VC_Common()
 		Patch<uint8_t>(alpha_clamp, 0x8B);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TOMMY_FIST_SHAKE_WEAPONS
 	// Fix Tommy not shaking his fists with brass knuckles (in all cases)
 	// and most post-GTA III weapons (when cars slow down for him)
 	try
@@ -3631,8 +3821,10 @@ void Patch_VC_Common()
 		HookEach_ExcludeChainsaw(exclude_chainsaw, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_SCREWDRIVER_IMPACT_SOUND
 	// Fix the screwdriver not making sounds on impact
 	try
 	{
@@ -3645,8 +3837,10 @@ void Patch_VC_Common()
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TEAR_GAS_DAMAGE
 	// Allow the tear gas to damage anyone (including the player), like on PS2
 	try
 	{
@@ -3654,8 +3848,10 @@ void Patch_VC_Common()
 		Nop(set_peds_choking, 6);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MAP_LEGEND_BLIP_OUTLINE
 	// Fix an incorrect vertex setup for the outline of a destination blip in the Map Legend
 	try
 	{
@@ -3665,13 +3861,16 @@ void Patch_VC_Common()
 		InterceptCall(draw2dPolygon, orgDraw2DPolygon, Draw2DPolygon_FixVertices);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MISSION_TEXT_DURATION || ENABLE_FIX_AMMUNATION_TEXT_SCALING
 	// Fixed most line wraps not scaling to resolution
 	// Shared namespace, but separate patch applications per-function
 	{
 		using namespace FixedLineWraps;
 
+#if ENABLE_FIX_AMMUNATION_TEXT_SCALING
 		// CMenuManager (general)
 		try
 		{
@@ -3704,7 +3903,9 @@ void Patch_VC_Common()
 			MenuManager::HookEach_Draw_Left(left_align, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_MISSION_TEXT_DURATION
 		// CDarkel::DrawMessages
 		try
 		{
@@ -3716,7 +3917,9 @@ void Patch_VC_Common()
 			Darkel::HookEach_DrawMessages_Right(set_centre_size, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_MISSION_TEXT_DURATION
 		// CGarages::PrintMessages
 		try
 		{
@@ -3727,7 +3930,9 @@ void Patch_VC_Common()
 			Garages::HookEach_PrintMessages_Right(set_centre_size, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_AMMUNATION_TEXT_SCALING
 		// CReplay::Display
 		try
 		{
@@ -3738,7 +3943,9 @@ void Patch_VC_Common()
 			Replay::HookEach_Display_Right(set_centre_size, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 
+#if ENABLE_FIX_AMMUNATION_TEXT_SCALING
 		// CSpecialFX::Render2DFXs
 		try
 		{
@@ -3752,9 +3959,12 @@ void Patch_VC_Common()
 			SpecialFX::HookEach_Render2DFXs_Right(set_centre_size, InterceptCall);
 		}
 		TXN_CATCH();
+#endif
 	}
+#endif
 
 
+#if ENABLE_FIX_FLARE_SCALING
 	// Corona flares not scaling to resolution
 	try
 	{
@@ -3765,8 +3975,10 @@ void Patch_VC_Common()
 		InterceptCall(render_one_flare_sprite, orgRenderOneXLUSprite, RenderOneXLUSprite_Scale);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ROADBLOCK_WEAPONS
 	// Fix roadblock SWAT/FBI/Army not using their primary weapon
 	try
 	{
@@ -3778,8 +3990,10 @@ void Patch_VC_Common()
 		InjectHook(switch_to_colt, SetCurrentWeapon_NOP);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_MUGGER_OBJECTIVE
 	// Fix a broken mugging ped objective
 	try
 	{
@@ -3811,8 +4025,10 @@ void Patch_VC_Common()
 		}
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_ROTATED_OBJECT_SHADOWS
 	// Fix CShadows::CastShadowEntityXY ignoring the Up rotation of an object
 	if (bSSESupported) try
 	{
@@ -3831,8 +4047,10 @@ void Patch_VC_Common()
 		InjectHook(cast_shadow_entity.get<void>(19), cast_shadow_entity_end, HookType::Jump);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_SECURICAR_TOUGHNESS
 	// Revert leftover GTA III code making Securicars very fragile against the player
 	try
 	{
@@ -3840,8 +4058,10 @@ void Patch_VC_Common()
 		Patch<uint8_t>(vehicle_damage, 0xEB);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_RADAR_BLIP_FILTER
 	// Set bilinear filtering on map blips so they are bilinear filtered also when the radar is off
 	try
 	{
@@ -3849,8 +4069,10 @@ void Patch_VC_Common()
 		Patch<uint8_t>(set_texture_filter_blips, rwFILTERLINEAR);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_TROPIC_RADAR_ANIMATION
 	// Animate boat_moving_hi on Tropic
 	try
 	{
@@ -3864,8 +4086,10 @@ void Patch_VC_Common()
 		Patch<uint8_t>(moving_radar_id_check.get<void>(12 + 1), 0x84); // jnz -> jz
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_HIDDEN_PACKAGES_STATS
 	// Display the actual number of hidden packages in Stats instead of a faux percentage value
 	try
 	{
@@ -3883,8 +4107,10 @@ void Patch_VC_Common()
 		Nop(total_packages.get<void>(0), 8);
 	}
 	TXN_CATCH();
+#endif
 
 
+#if ENABLE_FIX_SCRIPT_SPRITE_FILTER
 	// Apply bilinear filtering on script sprites and scale them to resolution
 	try
 	{
@@ -3900,6 +4126,7 @@ void Patch_VC_Common()
 		HookEach_Bilinear_Sprite2d(sprite2d_draw, InterceptCall);
 	}
 	TXN_CATCH();
+#endif
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
@@ -3929,7 +4156,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 			Common::Patches::DDraw_Common();
 		}
 
+#if ENABLE_FIX_DEP_STARTUP_CRASH
 		Common::Patches::FixRwcseg_Patterns();
+#endif
 	}
 	return TRUE;
 }

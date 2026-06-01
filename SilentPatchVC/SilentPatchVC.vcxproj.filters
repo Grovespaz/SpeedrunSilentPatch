@@ -72,6 +72,15 @@
     <ClInclude Include="EntityVC.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SilentPatchFeatureConfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="config_all_fixes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="config_speedrun.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\SilentPatch\RWGTA.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -57,7 +57,12 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="versionmeta.props" />
   </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="UserMacros">
+    <SilentPatchFeatureSet>Speedrun</SilentPatchFeatureSet>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SilentPatchFeatureDefinitions Condition="'$(SilentPatchFeatureSet)'=='Speedrun'">SILENTPATCH_SPEEDRUN;</SilentPatchFeatureDefinitions>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetExt>.asi</TargetExt>
     <TargetName>SilentPatchVC</TargetName>
@@ -74,7 +79,7 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_VC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_VC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(RWG34SDK)\include\d3d8;..\SilentPatch;..\SilentPatchVC;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -99,7 +104,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_VC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_VC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
@@ -130,7 +135,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_VC;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_VC;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
@@ -175,8 +180,11 @@
     <ClInclude Include="..\SilentPatch\Timer.h" />
     <ClInclude Include="..\SilentPatch\Utils\MemoryMgr.h" />
     <ClInclude Include="..\SilentPatch\Utils\Patterns.h" />
+    <ClInclude Include="config_all_fixes.h" />
+    <ClInclude Include="config_speedrun.h" />
     <ClInclude Include="EntityVC.h" />
     <ClInclude Include="ModelInfoVC.h" />
+    <ClInclude Include="SilentPatchFeatureConfig.h" />
     <ClInclude Include="VehicleVC.h" />
   </ItemGroup>
   <ItemGroup>

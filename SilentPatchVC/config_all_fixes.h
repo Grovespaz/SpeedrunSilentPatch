@@ -1,0 +1,3 @@
+#pragma once
+
+#define SILENTPATCHVC_FEATURE_DEFAULT 1

@@ -4,7 +4,7 @@
 
 #if defined(_DDRAW)
 #include "DDrawFeatureConfig.h"
-#elif defined(_GTA_III)
+#elif defined(_GTA_III) || defined(_GTA_VC)
 #include "SilentPatchFeatureConfig.h"
 #endif
 
@@ -167,14 +167,14 @@ namespace Common {
 		{
 			using namespace Memory::DynBase;
 
-#if !defined(_DDRAW) || ENABLE_FIX_USER_FILES_PATH
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x602240, GetMyDocumentsPath, HookType::Jump);
 
 			InjectHook(0x601A40, GetMyDocumentsPath, HookType::Call);
 			InjectHook(0x601A45, DynBaseAddress(0x601B2F), HookType::Jump);
 #endif
 
-#if !defined(_DDRAW) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x600E7E, width);
@@ -184,7 +184,7 @@ namespace Common {
 			Patch<BYTE>(0x600E92, 32);
 #endif
 
-#if !defined(_DDRAW) || ENABLE_FIX_NO_DIRECTPLAY
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x601CA0, 0xB8);
 			Patch<DWORD>(0x601CA1, 0x900);
@@ -195,14 +195,14 @@ namespace Common {
 		{
 			using namespace Memory::DynBase;
 
-#if !defined(_DDRAW) || ENABLE_FIX_USER_FILES_PATH
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x602220, GetMyDocumentsPath, HookType::Jump);
 
 			InjectHook(0x601A70, GetMyDocumentsPath, HookType::Call);
 			InjectHook(0x601A75, DynBaseAddress(0x601B5F), HookType::Jump);
 #endif
 
-#if !defined(_DDRAW) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x600E9E, width);
@@ -212,7 +212,7 @@ namespace Common {
 			Patch<BYTE>(0x600EB2, 32);
 #endif
 
-#if !defined(_DDRAW) || ENABLE_FIX_NO_DIRECTPLAY
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x601CD0, 0xB8);
 			Patch<DWORD>(0x601CD1, 0x900);
@@ -224,14 +224,14 @@ namespace Common {
 		{
 			using namespace Memory::DynBase;
 
-#if !defined(_DDRAW) || ENABLE_FIX_USER_FILES_PATH
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_FIX_USER_FILES_PATH
 			InjectHook(0x601E60, GetMyDocumentsPath, HookType::Jump);
 
 			InjectHook(0x6016B0, GetMyDocumentsPath, HookType::Call);
 			InjectHook(0x6016B5, DynBaseAddress(0x60179F), HookType::Jump);
 #endif
 
-#if !defined(_DDRAW) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 			if (width != 0 && height != 0)
 			{
 				Patch<DWORD>(0x600ADE, width);
@@ -241,7 +241,7 @@ namespace Common {
 			Patch<BYTE>(0x600AF2, 32);
 #endif
 
-#if !defined(_DDRAW) || ENABLE_FIX_NO_DIRECTPLAY
+#if (!defined(_DDRAW) && !defined(_GTA_VC)) || ENABLE_FIX_NO_DIRECTPLAY
 			// No DirectPlay dependency
 			Patch<BYTE>(0x601910, 0xB8);
 			Patch<DWORD>(0x601911, 0x900);
@@ -254,7 +254,7 @@ namespace Common {
 			using namespace Memory;
 			using namespace hook::txn;
 
-#if (!defined(_GTA_III) && !defined(_DDRAW)) || ENABLE_FIX_IMG_NO_BUFFERING
+#if (!defined(_GTA_III) && (!defined(_DDRAW) && !defined(_GTA_VC))) || ENABLE_FIX_IMG_NO_BUFFERING
 			// Remove FILE_FLAG_NO_BUFFERING from CdStreams
 			try
 			{
@@ -264,7 +264,7 @@ namespace Common {
 			TXN_CATCH();
 #endif
 
-#if !defined(_GTA_III) && !defined(_DDRAW)
+#if !defined(_GTA_III) && (!defined(_DDRAW) && !defined(_GTA_VC))
 			// III: Patch the icon handle to fix missing window icon
 			// (This is fixed since VC)
 			try
@@ -277,7 +277,7 @@ namespace Common {
 			TXN_CATCH();
 #endif
 
-#if (!defined(_GTA_III) && !defined(_DDRAW)) || ENABLE_ENHANCEMENT_NO_CENSORSHIP
+#if (!defined(_GTA_III) && (!defined(_DDRAW) && !defined(_GTA_VC))) || ENABLE_ENHANCEMENT_NO_CENSORSHIP
 			// No censorships
 			try
 			{
@@ -287,7 +287,7 @@ namespace Common {
 			TXN_CATCH();
 #endif
 
-#if (!defined(_GTA_III) && !defined(_DDRAW)) || ENABLE_FIX_UNNAMED_CDSTREAM_SEMAPHORE
+#if (!defined(_GTA_III) && (!defined(_DDRAW) && !defined(_GTA_VC))) || ENABLE_FIX_UNNAMED_CDSTREAM_SEMAPHORE
 			// unnamed CdStream semaphore
 			try
 			{
@@ -299,7 +299,7 @@ namespace Common {
 			TXN_CATCH();
 #endif
 
-#if (!defined(_GTA_III) && !defined(_DDRAW)) || ENABLE_FIX_FAKE_VRAM_POLL
+#if (!defined(_GTA_III) && (!defined(_DDRAW) && !defined(_GTA_VC))) || ENABLE_FIX_FAKE_VRAM_POLL
 			// Fake the VRAM poll
 			{
 				// III/VC
