@@ -85,7 +85,6 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 - WASD cheats removal (from chaos mod?)
 - Some sort of anticheat/antitamper
 - Fix default options (steer with mouse etc)
-- Fix WASD cheats
 
 ## Thanks / Credits
 * Silent, for creating SilentPatch, the project this project is based on
