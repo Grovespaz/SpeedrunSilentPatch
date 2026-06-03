@@ -157,7 +157,7 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PreprocessorDefinitions>SILENTPATCH_SPEEDRUN=1;$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(RWG33SDK)\include\d3d8;..\SilentPatch;..\SilentPatchIII;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>StdAfx.h</PrecompiledHeaderFile>
@@ -188,7 +188,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <PreprocessorDefinitions>SILENTPATCH_SPEEDRUN=1;$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(RWG33SDK)\include\d3d8;..\SilentPatch;..\SilentPatchIII;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>StdAfx.h</PrecompiledHeaderFile>
@@ -221,7 +221,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <PreprocessorDefinitions>SILENTPATCH_SPEEDRUN=1;$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_III;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(RWG33SDK)\include\d3d8;..\SilentPatch;..\SilentPatchIII;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>StdAfx.h</PrecompiledHeaderFile>

@@ -3853,7 +3853,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 			Common::Patches::DDraw_Common();
 		}
 
+#if ENABLE_FIX_DEP_STARTUP_CRASH
 		Common::Patches::FixRwcseg_Patterns();
+#endif
 	}
 	return TRUE;
 }
