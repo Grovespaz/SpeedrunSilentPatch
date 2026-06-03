@@ -296,16 +296,57 @@ LRESULT CALLBACK CustomWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 }
 static auto* const pCustomWndProc = CustomWndProc;
 
-static void (* const RsMouseSetPos)(RwV2d*) = AddressByVersion<void(*)(RwV2d*)>(0x6030C0, 0x6030A0, 0x602CE0);
+static void (* const RsMouseSetPos)(RwV2d*) = AddressByVersion<void(*)(RwV2d*)>(0x6030C0, 0x6030A0, 0x602CE0, 0x602E60);
 static void (*orgConstructRenderList)();
-void ResetMousePos()
+bool IsGameWindowForeground()
+{
+	if ( RsGlobal == nullptr || RsGlobal->ps == nullptr )
+	{
+		return false;
+	}
+
+	HWND window = *static_cast<HWND*>(RsGlobal->ps);
+	if ( window == nullptr )
+	{
+		return false;
+	}
+
+	HWND foregroundWindow = GetForegroundWindow();
+	return foregroundWindow == window || GetAncestor(foregroundWindow, GA_ROOT) == window;
+}
+
+void ResetMousePos_Recenter()
 {
 	if ( bGameInFocus )
 	{
 		RwV2d	vecPos = { RsGlobal->MaximumWidth * 0.5f, RsGlobal->MaximumHeight * 0.5f };
 		RsMouseSetPos(&vecPos);
 	}
+}
+
+void ResetMousePos()
+{
+	ResetMousePos_Recenter();
 	orgConstructRenderList();
+}
+
+void ResetMousePos_Recenter_JP()
+{
+	if ( IsGameWindowForeground() )
+	{
+		ResetMousePos_Recenter();
+	}
+}
+
+__declspec(naked) void ResetMousePos_JP()
+{
+	_asm
+	{
+		pushad
+		call	ResetMousePos_Recenter_JP
+		popad
+		jmp		dword ptr [orgConstructRenderList]
+	}
 }
 
 namespace PrintStringShadows
@@ -1048,7 +1089,7 @@ __declspec(naked) void CreateInstance_BikeFix()
 	}
 }
 
-extern char** ppUserFilesDir = AddressByVersion<char**>(0x6022AA, 0x60228A, 0x601ECA);
+extern char** ppUserFilesDir = AddressByVersion<char**>(0x6022AA, 0x60228A, 0x601ECA, 0x60204A);
 
 static LARGE_INTEGER	FrameTime;
 __declspec(safebuffers) int32_t GetTimeSinceLastFrame()
@@ -1516,7 +1557,9 @@ namespace VariableResets
 	void GameInitialise(const char* path)
 	{
 		ReInitOurVariables();
+#if ENABLE_FIX_TIMERS_RESET_NEW_GAME
 		TimerInitialise();
+#endif
 		orgGameInitialise(path);
 	}
 }
@@ -1905,9 +1948,22 @@ namespace OutroSplashFix
 	};
 
 	static RGBA* (__thiscall *orgRGBASet)(RGBA*, uint8_t, uint8_t, uint8_t, uint8_t);
-	static RGBA* __fastcall RGBASet_Clamp(RGBA* rgba, void*, int r, int g, int b, int a)
+	__declspec(naked) static void RGBASet_Clamp()
 	{
-		return orgRGBASet(rgba, static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b), static_cast<uint8_t>(std::clamp(a, 0, 255)));
+		_asm
+		{
+			cmp		dword ptr [esp + 16], 255
+			jle		check_negative
+			mov		dword ptr [esp + 16], 255
+
+		check_negative:
+			cmp		dword ptr [esp + 16], 0
+			jge		dispatch
+			mov		dword ptr [esp + 16], 0
+
+		dispatch:
+			jmp		dword ptr [orgRGBASet]
+		}
 	}
 }
 
@@ -3160,9 +3216,22 @@ void Patch_VC_Steam(uint32_t width, uint32_t height)
 	Common::Patches::DDraw_VC_Steam( width, height, aNoDesktopMode );
 }
 
-void Patch_VC_JP()
+void Patch_VC_JP(uint32_t width, uint32_t height)
 {
 	using namespace Memory::DynBase;
+
+	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x602AD2);
+
+#if ENABLE_FIX_MOUSE_MENU_LOCKUP
+	// Mouse fucking fix!
+	Patch<DWORD>(0x601530, 0xC3C030);
+#endif
+
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
+	// RsMouseSetPos call (SA style fix)
+	ReadCall( 0x4A5765, orgConstructRenderList );
+	InjectHook(0x4A5765, ResetMousePos_JP);
+#endif
 
 #if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
 	// Y axis sensitivity fix
@@ -3173,6 +3242,14 @@ void Patch_VC_JP()
 	Patch<DWORD>(0x47C266 + 0x22E + 0x2, 0x94ABD8);
 	Patch<DWORD>(0x481E8A + 0x4FE + 0x2, 0x94ABD8);
 #endif
+
+#if ENABLE_FIX_AB_DRIVE_CD_CHECK
+	// Scan for A/B drives looking for audio files
+	Patch<DWORD>(0x5D7521, 'A');
+	Patch<DWORD>(0x5D76E4, 'A');
+#endif
+
+	Common::Patches::DDraw_VC_JP( width, height, aNoDesktopMode );
 }
 
 void Patch_VC_Common()
@@ -3694,7 +3771,9 @@ void Patch_VC_Common()
 			get_pattern("C6 05 ? ? ? ? ? E8 ? ? ? ? C7 05", 7)
 		};
 
+#if ENABLE_FIX_TIMERS_RESET_NEW_GAME
 		TimerInitialise = reinterpret_cast<decltype(TimerInitialise)>(get_pattern("83 E4 F8 68 ? ? ? ? E8", -6));
+#endif
 
 		InterceptCall(game_initialise, orgGameInitialise, GameInitialise);
 		HookEach_ReInitGameObjectVariables(reinit_game_object_variables, InterceptCall);
@@ -3924,7 +4003,7 @@ void Patch_VC_Common()
 		try
 		{
 			std::array<void*, 1> set_centre_size = {
-				get_pattern("E8 ? ? ? ? 59 E8 ? ? ? ? 6A 01 E8 ? ? ? ? 59 8D 4C 24 08")
+				get_pattern("E8 ? ? ? ? 59 E8 ? ? ? ? 6A ? E8 ? ? ? ? 59 8D 4C 24 08")
 			};
 
 			Garages::HookEach_PrintMessages_Right(set_centre_size, InterceptCall);
@@ -4147,9 +4226,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 			if ( version == 0 ) Patch_VC_10(width, height);
 			else if ( version == 1 ) Patch_VC_11(width, height);
 			else if ( version == 2 ) Patch_VC_Steam(width, height);
-
-			// Y axis sensitivity only
-			else if (*(DWORD*)Memory::DynBaseAddress(0x601048) == 0x5E5F5D60) Patch_VC_JP();
+			else if ( version == 3 ) Patch_VC_JP(width, height);
 
 			Patch_VC_Common();
 			Common::Patches::III_VC_Common();

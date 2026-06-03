@@ -79,6 +79,12 @@ void InjectHooks()
 		ppUserFilesDir = (char**)Memory::DynBaseAddress(0x601ECA);
 		Common::Patches::DDraw_VC_Steam( width, height, aNoDesktopMode );
 	}
+	else if (*(DWORD*)Memory::DynBaseAddress(0x601048) == 0x5E5F5D60)
+	{
+		// VC Japanese
+		ppUserFilesDir = (char**)Memory::DynBaseAddress(0x60204A);
+		Common::Patches::DDraw_VC_JP( width, height, aNoDesktopMode );
+	}
 
 	Common::Patches::DDraw_Common();
 }

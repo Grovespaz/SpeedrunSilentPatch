@@ -79,6 +79,7 @@ namespace Memory
 				if (*(uint32_t*)DynBaseAddress(0x667BF5) == 0xB85548EC) *bVer = 0;
 				else if (*(uint32_t*)DynBaseAddress(0x667C45) == 0xB85548EC) *bVer = 1;
 				else if (*(uint32_t*)DynBaseAddress(0x666BA5) == 0xB85548EC) *bVer = 2;
+				else if (*(uint32_t*)DynBaseAddress(0x601048) == 0x5E5F5D60) *bVer = 3;
 			}
 		}
 
@@ -339,7 +340,7 @@ namespace Memory
 
 #endif
 
-#if defined _GTA_III || defined _GTA_VC
+#if defined _GTA_III
 
 		inline uintptr_t AddressByVersion(uintptr_t address10, uintptr_t address11, uintptr_t addressSteam)
 		{
@@ -367,17 +368,64 @@ namespace Memory
 			}
 		}
 
+#elif defined _GTA_VC
+
+		inline uintptr_t AddressByVersion(uintptr_t address10, uintptr_t address11, uintptr_t addressSteam, uintptr_t addressJP = 0)
+		{
+			InitializeVersions();
+
+			signed char		bVer = *GetVer();
+
+			switch ( bVer )
+			{
+			case 1:
+#ifdef assert
+				assert(address11);
+#endif
+				return DynBaseAddress(address11);
+			case 2:
+#ifdef assert
+				assert(addressSteam);
+#endif
+				return DynBaseAddress(addressSteam);
+			case 3:
+#ifdef assert
+				assert(addressJP);
+#endif
+				return DynBaseAddress(addressJP);
+			default:
+#ifdef assert
+				assert(address10);
+#endif
+				return DynBaseAddress(address10);
+			}
+		}
+
 #endif
 
 	}
 }
 
-#if defined _GTA_III || defined _GTA_VC
+#if defined _GTA_III
 
 template<typename T = uintptr_t>
 inline T AddressByVersion(uintptr_t address10, uintptr_t address11, uintptr_t addressSteam)
 {
 	return T(Memory::internal::AddressByVersion( address10, address11, addressSteam ));
+}
+
+#elif defined _GTA_VC
+
+template<typename T = uintptr_t>
+inline T AddressByVersion(uintptr_t address10, uintptr_t address11, uintptr_t addressSteam)
+{
+	return T(Memory::internal::AddressByVersion( address10, address11, addressSteam ));
+}
+
+template<typename T = uintptr_t>
+inline T AddressByVersion(uintptr_t address10, uintptr_t address11, uintptr_t addressSteam, uintptr_t addressJP)
+{
+	return T(Memory::internal::AddressByVersion( address10, address11, addressSteam, addressJP ));
 }
 
 #elif defined _GTA_SA

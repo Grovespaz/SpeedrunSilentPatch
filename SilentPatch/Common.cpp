@@ -211,8 +211,16 @@ namespace Common {
 				auto addr_mssHook = get_pattern( "6A 00 6A 02 6A 10 68 00 7D 00 00", -6 + 2 );
 				auto addr_ualHook = get_pattern( "FF 15 ? ? ? ? 6A 00 6A 18", 0xA );
 
-				OldSetPreference = *static_cast<decltype(OldSetPreference)*>(addr_mssHook);
-				Patch( addr_mssHook, &pInjectMSS );
+#if defined(_GTA_VC)
+				const bool isVCJP = *(DWORD*)DynBaseAddress(0x601048) == 0x5E5F5D60;
+				// JP routes this MSS call through a custom .ljtsrx import-dispatch slot,
+				// not the normal MSS IAT slot used by other VC builds.
+				if (!isVCJP)
+#endif
+				{
+					OldSetPreference = *static_cast<decltype(OldSetPreference)*>(addr_mssHook);
+					Patch( addr_mssHook, &pInjectMSS );
+				}
 
 				ReadCall( addr_ualHook, RsEventHandler );
 				InjectHook( addr_ualHook, Inject_UAL );
