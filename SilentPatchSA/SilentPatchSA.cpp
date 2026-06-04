@@ -33,6 +33,8 @@
 #include "DelimStringReader.hpp"
 #include "FriendlyMonitorNames.h"
 #include "SVF.h"
+#include "SilentPatchFeatureConfig.h"
+#include "CrashLoggerSA.h"
 
 #include "debugmenu_public.h"
 #include "resource.h"
@@ -1398,6 +1400,7 @@ void StencilShadowAlloc( )
 	} ();
 }
 
+#if !defined(SILENTPATCH_SPEEDRUN)
 RwBool GTARtAnimInterpolatorSetCurrentAnim(RtAnimInterpolator* animI, RtAnimAnimation* anim)
 {
 	animI->pCurrentAnim = anim;
@@ -1422,6 +1425,7 @@ RwBool GTARtAnimInterpolatorSetCurrentAnim(RtAnimInterpolator* animI, RtAnimAnim
 
 	return TRUE;
 }
+#endif
 
 DWORD WINAPI CdStreamSetFilePointer( HANDLE hFile, uint32_t distanceToMove, PLONG lpDistanceToMoveHigh, DWORD dwMoveMethod )
 {
@@ -5121,6 +5125,7 @@ static const double		dRetailRadioNameSizeY = 0.9;
 
 #pragma comment(lib, "shlwapi.lib")
 
+#if !defined(SILENTPATCH_SPEEDRUN)
 BOOL InjectDelayedPatches_10()
 {
 	if ( !IsAlreadyRunning() )
@@ -6478,10 +6483,334 @@ BOOL InjectDelayedPatches_NewBinaries()
 	}
 	return TRUE;
 }
+#endif
 
 static char		aNoDesktopMode[64];
 
+#if defined(SILENTPATCH_SPEEDRUN)
+BOOL InjectDelayedPatches_10_Speedrun()
+{
+	if ( !IsAlreadyRunning() )
+	{
+		using namespace Memory;
 
+		const HINSTANCE hInstance = GetModuleHandle(nullptr);
+		auto Protect = ScopedUnprotect::SectionOrFullModule(hInstance, ".text");
+
+#if ENABLE_FIX_CDSTREAM_DEADLOCK
+		const ModuleList moduleList;
+		const HMODULE modloaderModule = moduleList.Get( L"modloader" );
+
+		FLAUtils::Init( moduleList );
+
+		// Race condition in CdStream fixed
+		// Not taking effect with modloader
+		if ( !ModCompat::ModloaderCdStreamRaceConditionAware( modloaderModule ) )
+		{
+			// Don't patch if old FLA and enhanced IMGs are in place
+			// For new FLA, we patch everything except CdStreamThread and then interop with FLA
+			const bool flaBugAware = FLAUtils::CdStreamRaceConditionAware();
+			const bool usesEnhancedImages = FLAUtils::UsesEnhancedIMGs();
+
+			if ( !usesEnhancedImages || flaBugAware )
+			{
+				ReadCall( 0x406C78, CdStreamSync::orgCdStreamInitThread );
+				InjectHook( 0x406C78, CdStreamSync::CdStreamInitThread );
+
+				{
+					const uintptr_t address = ModCompat::Utils::GetFunctionAddrIfRerouted(0x406460);
+
+					const uintptr_t waitForSingleObject = address + 0x1D;
+					const uint8_t orgCode[] = { 0x8B, 0x46, 0x04, 0x85, 0xC0, 0x74, 0x10, 0xC6, 0x46, 0x0D, 0x01 };
+					if ( memcmp( orgCode, (void*)waitForSingleObject, sizeof(orgCode) ) == 0 )
+					{
+						VP::Patch( waitForSingleObject, { 0x56, 0xFF, 0x15 } );
+						VP::Patch( waitForSingleObject + 3, &CdStreamSync::CdStreamSyncOnObject );
+						VP::Patch( waitForSingleObject + 3 + 4, { 0x5E, 0xC3 } );
+
+						{
+							const uint8_t orgCode1[] = { 0xFF, 0x15 };
+							const uint8_t orgCode2[] = { 0x48, 0xF7, 0xD8 };
+							const uintptr_t getOverlappedResult = address + 0x5F;
+							if ( memcmp( orgCode1, (void*)getOverlappedResult, sizeof(orgCode1) ) == 0 &&
+								memcmp( orgCode2, (void*)(getOverlappedResult + 6), sizeof(orgCode2) ) == 0 )
+							{
+								VP::Patch( getOverlappedResult + 2, &CdStreamSync::pGetOverlappedResult );
+								VP::Patch( getOverlappedResult + 6, { 0x5E, 0xC3 } ); // pop esi / retn
+							}
+						}
+					}
+				}
+
+				if ( !usesEnhancedImages )
+				{
+					Patch( 0x406669, { 0x56, 0xFF, 0x15 } );
+					Patch( 0x406669 + 3, &CdStreamSync::CdStreamThreadOnObject );
+					Patch( 0x406669 + 3 + 4, { 0xEB, 0x0F } );
+				}
+
+				Patch( 0x406910, { 0xFF, 0x15 } );
+				Patch( 0x406910 + 2, &CdStreamSync::CdStreamInitializeSyncObject );
+				Nop( 0x406910 + 6, 4 );
+				Nop( 0x406910 + 0x16, 2 );
+
+				Patch( 0x4063B5, { 0x56, 0x50 } );
+				InjectHook( 0x4063B5 + 2, CdStreamSync::CdStreamShutdownSyncObject_Stub, HookType::Call );
+			}
+		}
+#endif
+
+#if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
+		// Skip the EAX/NVIDIA intro splashes.
+		Patch<WORD>(AddressByRegion_10<DWORD>(0x748AA8), 0x3DEB);
+#endif
+
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+void Patch_SA_10_Speedrun(HINSTANCE hInstance)
+{
+	using namespace Memory;
+
+#if MEM_VALIDATORS
+	InstallMemValidator();
+#endif
+
+#if ENABLE_SUPPORT_DELAYED_PATCHING
+	// IsAlreadyRunning needs to be read relatively late - the later, the better
+	{
+		const uintptr_t pIsAlreadyRunning = AddressByRegion_10<uintptr_t>(0x74872D);
+		ReadCall( pIsAlreadyRunning, IsAlreadyRunning );
+		InjectHook(pIsAlreadyRunning, InjectDelayedPatches_10_Speedrun);
+	}
+#else
+	UNREFERENCED_PARAMETER(hInstance);
+#endif
+
+#if ENABLE_FIX_MOUSE_MENU_LOCKUP
+	// Disable re-initialization of DirectInput mouse device by the game
+	Patch<BYTE>(0x576CCC, 0xEB);
+	Patch<BYTE>(0x576EBA, 0xEB);
+	Patch<BYTE>(0x576F8A, 0xEB);
+
+	// Make sure DirectInput mouse device is set non-exclusive (may not be needed?)
+	Patch<DWORD>(AddressByRegion_10<DWORD>(0x7469A0), 0x9090C030);
+#endif
+
+#if ENABLE_FIX_NUM5_BINDABLE
+	// Bindable NUM5
+	Nop(0x57DC55, 2);
+#endif
+
+#if ENABLE_FIX_16_9_RESOLUTIONS
+	// Unlocked widescreen resolutions
+	{
+		// Advanced Display Options
+		Nop(0x745B71, 6); // Skip width check
+		Nop(0x745B81, 6); // Skip height check
+		Patch<uint8_t>(0x745B96, 0xEB); // Skip AR check
+		Nop(0x745BFC, 2); // Skip VRAM check
+
+		// Resolution selection dialog
+		Nop(0x74596C, 6); // Skip width check
+		Nop(0x74597A, 6); // Skip height check
+		Patch<uint8_t>(0x7459D0, 0xEB); // Skip AR check
+	}
+#endif
+
+#if ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
+	// Default resolution to native resolution
+	const auto [width, height] = GetDesktopResolution();
+	sprintf_s(aNoDesktopMode, "Cannot find %ux%ux32 video mode", width, height);
+
+	if (width != 0 && height != 0)
+	{
+		Patch<DWORD>(0x746363, width);
+		Patch<DWORD>(0x746368, height);
+		Patch<const char*>(0x7463C8, aNoDesktopMode);
+	}
+#endif
+
+#if ENABLE_FIX_NO_DIRECTPLAY
+	// No DirectPlay dependency
+	// mov eax, 0x900
+	Patch<BYTE>(AddressByRegion_10<DWORD>(0x74754A), 0xB8);
+	Patch<DWORD>(AddressByRegion_10<DWORD>(0x74754B), 0x900);
+#endif
+
+#if ENABLE_FIX_USER_FILES_PATH
+	// SHGetFolderPath on User Files
+	InjectHook(0x744FB0, GetMyDocumentsPathSA, HookType::Jump);
+#endif
+
+#if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
+	// Y axis sensitivity fix
+	// By ThirteenAG
+	float* sens = *(float**)0x50F03C;
+	Patch<const void*>(0x50EB70 + 0x4D6 + 0x2, sens);
+	Patch<const void*>(0x50F970 + 0x1B6 + 0x2, sens);
+	Patch<const void*>(0x5105C0 + 0x666 + 0x2, sens);
+	Patch<const void*>(0x511B50 + 0x2B8 + 0x2, sens);
+	Patch<const void*>(0x521500 + 0xD8C + 0x2, sens);
+#endif
+
+#if ENABLE_FIX_CAR_EXPLOSION_CRASH
+	// Car explosion crash with multimonitor
+	// Unitialized collision data breaking stencil shadows
+	{
+		using namespace UnitializedCollisionDataFix;
+
+		VP::InterceptCall(ModCompat::Utils::GetFunctionAddrIfRerouted(0x40F870) + 0x63, orgMemMgrMalloc, CollisionData_MallocAndInit);
+
+		std::array<uintptr_t, 2> newAndInit = {
+			ModCompat::Utils::GetFunctionAddrIfRerouted(0x40F740) + 0xC,
+			ModCompat::Utils::GetFunctionAddrIfRerouted(0x40F810) + 0xD,
+		};
+		HookEach_CollisionDataNew(newAndInit, InterceptCall);
+	}
+#endif
+
+#if ENABLE_FIX_HOODLUM_RECRUITING_REPLAY
+	// Correct an improperly decrypted CPlayerPedData::operator= that broke gang recruiting after activating replays
+	// Only broken in the HOODLUM EXE and the compact EXE that carried over the bug
+	// By Wesser
+	{
+		using namespace PlayerPedDataAssignment;
+
+		uintptr_t placeToPatch = ModCompat::Utils::GetFunctionAddrIfRerouted(0x45C4B0) + 0x5D;
+
+		// If we're overwriting actual meaningful instructions and not NOPs, use a different wrapper
+		if (MemEquals(placeToPatch, { 0x90, 0x90, 0x90, 0x90, 0x90 }))
+		{
+			InjectHook(placeToPatch, AssignmentOp_Hoodlum, HookType::Call);
+		}
+		else
+		{
+			InjectHook(placeToPatch, AssignmentOp_Compact, HookType::Call);
+			Nop(placeToPatch + 5, 3);
+		}
+	}
+#endif
+
+#if ENABLE_FIX_DANCING_TIMINGS
+	// Fixed CAEAudioUtility timers - not typecasting to float so we're not losing precision after X days of PC uptime
+	// Also fixed integer division by zero
+	{
+		::QueryPerformanceFrequency( &UtilsFrequency );
+		::QueryPerformanceCounter( &UtilsStartTime );
+
+		Patch( 0x5B9868 + 2, &pAudioUtilsFrequency );
+		InjectHook( 0x5B9886, AudioUtilsGetStartTime );
+		InjectHook( 0x4D9E80, AudioUtilsGetCurrentTimeInMs, HookType::Jump );
+	}
+#endif
+
+#if ENABLE_FIX_ANY_VARIABLE_RESETS
+	// Reset variables on New Game
+	{
+		using namespace VariableResets;
+
+		std::array<uintptr_t, 2> reInitGameObjectVariables = { 0x53C6DB, 0x53C76D };
+		HookEach_ReInitGameObjectVariables(reInitGameObjectVariables, InterceptCall);
+
+#if ENABLE_FIX_IPL_SPAWNS_NEW_GAME
+		InterceptCall(0x5B89E4, orgLoadPickup, LoadPickup_SaveLine);
+		InterceptCall(0x5B89EE, orgLoadCarGenerator, LoadCarGenerator_SaveLine);
+		InterceptCall(0x5B89F9, orgLoadStuntJump, LoadStuntJump_SaveLine);
+#endif
+
+		// Variables to reset
+#if ENABLE_FIX_STOP_CARL_MESSAGE_NEW_GAME
+		GameVariablesToReset.emplace_back( *(bool**)(0x63E8D8+1) ); // CPlayerPed::bHasDisplayedPlayerQuitEnterCarHelpText
+#endif
+#if ENABLE_FIX_FREE_RESPRAYS_NEW_GAME
+		GameVariablesToReset.emplace_back( *(bool**)(0x44AC97+1) ); // CGarages::RespraysAreFree
+#endif
+
+#if ENABLE_FIX_EMERGENCY_DISPATCH_TIMERS_NEW_GAME
+		GameVariablesToReset.emplace_back( *(int**)(0x42131F + 2) ); // CCarCtrl::LastTimeFireTruckCreated
+		GameVariablesToReset.emplace_back( *(int**)(0x421319 + 2) ); // CCarCtrl::LastTimeAmbulanceCreated
+#endif
+
+#if ENABLE_FIX_STAT_COUNTERS_NEW_GAME
+		GameVariablesToReset.emplace_back( *(int**)(0x55C843 + 1) ); // CStats::m_CycleSkillCounter
+		GameVariablesToReset.emplace_back( *(int**)(0x55CA39 + 1) ); // CStats::m_SwimUnderWaterCounter
+		GameVariablesToReset.emplace_back( *(int**)(0x55CF3E + 2) ); // CStats::m_WeaponCounter
+		GameVariablesToReset.emplace_back( *(int**)(0x55CF2A + 2) ); // CStats::m_LastWeaponTypeFired
+		GameVariablesToReset.emplace_back( *(int**)(0x55CFC1 + 1) ); // CStats::m_DeathCounter
+		GameVariablesToReset.emplace_back( *(int**)(0x55C5E5 + 1) ); // CStats::m_MaxHealthCounter
+		GameVariablesToReset.emplace_back( *(int**)(0x55D043 + 1) ); // CStats::m_AddToHealthCounter
+
+		// Non-zero inits still need to be done
+		GameVariablesToReset.emplace_back( *(TimeNextMadDriverChaseCreated_t<float>**)(0x421369 + 2) ); // CCarCtrl::TimeNextMadDriverChaseCreated
+#endif
+
+#if ENABLE_FIX_KEEP_WEAPONS_NEW_GAME
+		GameVariablesToReset.emplace_back( *(ResetToTrue_t**)(0x4758A4 + 2) ); // CGameLogic::bPenaltyForDeathApplies
+		GameVariablesToReset.emplace_back( *(ResetToTrue_t**)(0x4758C4 + 1) ); // CGameLogic::bPenaltyForArrestApplies
+#endif
+	}
+#endif
+
+#if ENABLE_ENHANCEMENT_MONITOR_SELECTION_DIALOG
+	// Improved resolution selection dialog
+	{
+		using namespace NewResolutionSelectionDialog;
+
+		ppRWD3D9 = *AddressByRegion_10<IDirect3D9***>(0x7F6312 + 1);
+		FrontEndMenuManager = *(void**)(0x4054DB + 1);
+
+		orgGetDocumentsPath = AddressByRegion_10<char*(*)()>(0x744FB0);
+
+		Patch(AddressByRegion_10(0x746241 + 2), &pDialogBoxParamA_New);
+		Patch(AddressByRegion_10(0x745DB3 + 2), &pSetFocus_NOP);
+
+		InterceptCall(AddressByRegion_10(0x7461D8), orgRwEngineGetSubSystemInfo, RwEngineGetSubSystemInfo_GetFriendlyNames);
+		InterceptCall(AddressByRegion_10(0x7461ED), orgRwEngineGetCurrentSubSystem, RwEngineGetCurrentSubSystem_FromSettings);
+	}
+#endif
+
+#if ENABLE_FIX_MISSION_TEXT_DURATION
+	// Fix some big messages staying on screen longer at high resolutions due to a cut sliding text feature.
+	{
+		using namespace SlidingTextsScalingFixes;
+
+		// "Unscale" text sliding thresholds, so texts don't stay on screen longer at high resolutions
+		Patch(0x58D2E9 + 1, &FIXED_RES_WIDTH_SCALE);
+
+		// Replace dword ptr [esp+0Ch+X], eax \ dword ptr [esp+0Ch+X]
+		// with a constant fld [620.0]
+		static const float f620 = FIXED_RES_WIDTH_SCALE - 20.0f;
+		Patch(0x58C90E, { 0x90, 0x90, 0xD9, 0x05 });
+		Patch(0x58C90E + 4, &f620);
+	}
+#endif
+
+#if ENABLE_FIX_SKIMMER_WINDOWS_11_24H2
+	// Fix Skimmer not spawning correctly (and shooting up the sky) on Windows 11 24H2
+	// Missing vehicles.ide values should have always caused issues, but only in 24H2 fgets/LeaveCriticalSection uses enough stack
+	// to scramble the stale values in CFileLoader::LoadVehicleObject.
+	{
+		using namespace SkimmerVehiclesIdeFix;
+
+		InterceptCall(0x5B6FC7, orgSscanf, sscanf_Defaults);
+	}
+#endif
+}
+
+static void ShowSpeedrunUnsupportedVersionMessage()
+{
+	MessageBoxW( nullptr, L"You're using an executable which is not supported by SpeedrunSilentPatchSA!\n\n"
+		L"SpeedrunSilentPatchSA only supports GTA San Andreas 1.0.",
+		L"SpeedrunSilentPatchSA", MB_ICONWARNING );
+}
+#endif
+
+
+#if !defined(SILENTPATCH_SPEEDRUN)
 void Patch_SA_10(HINSTANCE hInstance)
 {
 	using namespace Memory;
@@ -10647,6 +10976,7 @@ void Patch_SA_NewBinaries_Common(HINSTANCE hInstance)
 	}
 	TXN_CATCH();
 }
+#endif
 
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
@@ -10655,11 +10985,17 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 	if ( fdwReason == DLL_PROCESS_ATTACH )
 	{
+		CrashLoggerSA::Install(hinstDLL);
+
 		const HINSTANCE hInstance = GetModuleHandle(nullptr);
 		auto Protect = ScopedUnprotect::SectionOrFullModule(hInstance, ".text");
 		auto Protect2 = ScopedUnprotect::Section(hInstance, ".rdata");
 
 		const int8_t version = Memory::GetVersion().version;
+#if defined(SILENTPATCH_SPEEDRUN)
+		if ( version == 0 ) Patch_SA_10_Speedrun(hInstance);
+		else ShowSpeedrunUnsupportedVersionMessage();
+#else
 		if ( version == 0 ) Patch_SA_10(hInstance);
 		else if ( version == 1 ) Patch_SA_11(); // Not supported anymore
 		else if ( version == 2 ) Patch_SA_Steam(); // Not supported anymore
@@ -10670,6 +11006,11 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 			// if ( *(DWORD*)DynBaseAddress(0x49F810) == 0x64EC8B55 ) { normal } else { low violence }
 			Patch_SA_NewBinaries_Common(hInstance);
 		}
+#endif
+	}
+	else if ( fdwReason == DLL_PROCESS_DETACH )
+	{
+		CrashLoggerSA::Uninstall();
 	}
 	return TRUE;
 }

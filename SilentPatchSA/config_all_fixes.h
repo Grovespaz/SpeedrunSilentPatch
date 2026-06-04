@@ -1,0 +1,3 @@
+#pragma once
+
+#define SILENTPATCHSA_FEATURE_DEFAULT 1

@@ -90,6 +90,9 @@
     <ClCompile Include="EventsSA.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CrashLoggerSA.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="StdAfxSA.h">
@@ -180,6 +183,18 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="EventsSA.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="config_all_fixes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="config_speedrun.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SilentPatchFeatureConfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CrashLoggerSA.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

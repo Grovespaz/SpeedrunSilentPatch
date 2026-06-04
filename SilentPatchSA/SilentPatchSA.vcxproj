@@ -57,18 +57,24 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="versionmeta.props" />
   </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="UserMacros">
+    <SilentPatchFeatureSet>Speedrun</SilentPatchFeatureSet>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SilentPatchTargetNamePrefix Condition="'$(SilentPatchFeatureSet)'=='Speedrun'">Speedrun</SilentPatchTargetNamePrefix>
+    <SilentPatchFeatureDefinitions Condition="'$(SilentPatchFeatureSet)'=='Speedrun'">SILENTPATCH_SPEEDRUN;</SilentPatchFeatureDefinitions>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetExt>.asi</TargetExt>
-    <TargetName>SilentPatchSA</TargetName>
+    <TargetName>$(SilentPatchTargetNamePrefix)SilentPatchSA</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetExt>.asi</TargetExt>
-    <TargetName>SilentPatchSA</TargetName>
+    <TargetName>$(SilentPatchTargetNamePrefix)SilentPatchSA</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Shipping|Win32'">
     <TargetExt>.asi</TargetExt>
-    <TargetName>SilentPatchSA</TargetName>
+    <TargetName>$(SilentPatchTargetNamePrefix)SilentPatchSA</TargetName>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
@@ -87,7 +93,7 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_SA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_SA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(RWG36SDK)\include\d3d9;..\SilentPatch;..\SilentPatchSA;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>StdAfxSA.h</PrecompiledHeaderFile>
@@ -117,7 +123,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_SA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_SA;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(RWG36SDK)\include\d3d9;..\SilentPatch;..\SilentPatchSA;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -151,7 +157,7 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <PreprocessorDefinitions>_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_SA;NDEBUG;_SECURE_SCL=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>$(SilentPatchFeatureDefinitions)_HAS_EXCEPTIONS=0;PATTERNS_USE_HINTS=1;_GTA_SA;NDEBUG;_SECURE_SCL=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <AdditionalIncludeDirectories>$(RWG36SDK)\include\d3d9;..\SilentPatch;..\SilentPatchSA;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -212,6 +218,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="AudioHardwareSA.cpp" />
+    <ClCompile Include="CrashLoggerSA.cpp" />
     <ClCompile Include="EventsSA.cpp" />
     <ClCompile Include="FireManagerSA.cpp" />
     <ClCompile Include="FLACDecoderSA.cpp" />
@@ -246,6 +253,9 @@
     <ClInclude Include="..\SilentPatch\Utils\Patterns.h" />
     <ClInclude Include="AnimationSA.h" />
     <ClInclude Include="AudioHardwareSA.h" />
+    <ClInclude Include="config_all_fixes.h" />
+    <ClInclude Include="config_speedrun.h" />
+    <ClInclude Include="CrashLoggerSA.h" />
     <ClInclude Include="EventsSA.h" />
     <ClInclude Include="FireManagerSA.h" />
     <ClInclude Include="FLACDecoderSA.h" />
@@ -258,6 +268,7 @@
     <ClInclude Include="PoolsSA.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="ScriptSA.h" />
+    <ClInclude Include="SilentPatchFeatureConfig.h" />
     <ClInclude Include="SpeechContextsSA.h" />
     <ClInclude Include="StdAfxSA.h" />
     <ClInclude Include="TimerSA.h" />
