@@ -63,8 +63,6 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 - Num5 is now bindable (like in the 1.01 patch).
 - Dancing minigame timings have been improved, now they do not lose accuracy over time depending on the PC's uptime.
 - "Keep weapons after wasted" and "keep weapons after busted" are now reset on the New Game.
-- Steam and RGL versions have proper aspect ratios now.
-- Steam/RGL versions will now default Steer with Mouse option to disabled, like in 1.0/1.01.
 - Pickups, car generators, and stunt jumps spawned through the text IPL files now reinitialize on a New Game. Most notably, this fixes several pickups (like fire extinguishers) going missing after starting a new game.
 - Mission title and 'Mission Passed' texts now stay on screen for the same duration, regardless of screen resolution.
 - 16:9 resolutions are now selectable (like in the 1.01 patch).
@@ -73,9 +71,7 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 - Several stat counters now reset on New Game - so the player will not level up quicker after starting New Game from a save.
 - The "To stop Carl..." message now resets properly on New Game.
 - If the settings file is absent, the game will now default to your desktop resolution instead of 800x600x32.
-- Censorships from Steam and RGL versions for German players have been removed.
 - Remade the monitor selection dialog, adding several quality-of-life improvements - such as remembering the selected screen, modern styling, and an option to skip the dialog appearing on every game launch.
-- The Steam/RGL version of the game will no longer reject 1.0/1.01 saves (still, a compatible SCM is needed for the save to work).
 - EAX/NVIDIA splashes are now removed.
 
 
