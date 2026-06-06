@@ -36,6 +36,9 @@
     <ClCompile Include="..\SilentPatch\Common_ddraw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\SilentPatch\CrashLogger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\SilentPatch\StoredCar.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -75,6 +78,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\SilentPatch\Common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\SilentPatch\CrashLogger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\SilentPatch\StoredCar.h">

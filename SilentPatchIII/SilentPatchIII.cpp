@@ -12,6 +12,7 @@
 #include "TheFLAUtils.h"
 #include "SVF.h"
 #include "SilentPatchFeatureConfig.h"
+#include "CrashLogger.h"
 
 #include <array>
 #include <memory>
@@ -3831,11 +3832,12 @@ void Patch_III_Common()
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
-	UNREFERENCED_PARAMETER(hinstDLL);
 	UNREFERENCED_PARAMETER(lpvReserved);
 
 	if ( fdwReason == DLL_PROCESS_ATTACH )
 	{
+		CrashLogger::Install(hinstDLL);
+
 		const auto [width, height] = GetDesktopResolution();
 		sprintf_s(aNoDesktopMode, "Cannot find %ux%ux32 video mode", width, height);
 
@@ -3856,6 +3858,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 #if ENABLE_FIX_DEP_STARTUP_CRASH
 		Common::Patches::FixRwcseg_Patterns();
 #endif
+	}
+	else if ( fdwReason == DLL_PROCESS_DETACH )
+	{
+		CrashLogger::Uninstall();
 	}
 	return TRUE;
 }

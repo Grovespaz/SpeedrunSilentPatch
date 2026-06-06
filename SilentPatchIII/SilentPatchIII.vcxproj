@@ -25,6 +25,11 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Shipping|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\SilentPatch\CrashLogger.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Shipping|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\SilentPatch\Desktop.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Shipping|Win32'">NotUsing</PrecompiledHeader>
@@ -68,6 +73,7 @@
   <ItemGroup>
     <ClInclude Include="..\SilentPatch\Common.h" />
     <ClInclude Include="..\SilentPatch\Common_ddraw.h" />
+    <ClInclude Include="..\SilentPatch\CrashLogger.h" />
     <ClInclude Include="..\SilentPatch\debugmenu_public.h" />
     <ClInclude Include="..\SilentPatch\Desktop.h" />
     <ClInclude Include="..\SilentPatch\Maths.h" />
