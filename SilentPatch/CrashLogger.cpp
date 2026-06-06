@@ -1,5 +1,5 @@
-#include "StdAfxSA.h"
-#include "CrashLoggerSA.h"
+#include "StdAfx.h"
+#include "CrashLogger.h"
 
 #pragma warning(push)
 #pragma warning(disable:4091)
@@ -11,14 +11,33 @@
 #include <cstdio>
 #include <cstring>
 
-namespace CrashLoggerSA
+namespace CrashLogger
 {
 	namespace
 	{
+#if defined(_GTA_III)
+		const char* const GAME_NAME = "SilentPatchIII";
+#if defined(SILENTPATCH_SPEEDRUN)
+		const char* const LOG_FILE_NAME = "SpeedrunSilentPatchIII_crash.log";
+#else
+		const char* const LOG_FILE_NAME = "SilentPatchIII_crash.log";
+#endif
+#elif defined(_GTA_VC)
+		const char* const GAME_NAME = "SilentPatchVC";
+#if defined(SILENTPATCH_SPEEDRUN)
+		const char* const LOG_FILE_NAME = "SpeedrunSilentPatchVC_crash.log";
+#else
+		const char* const LOG_FILE_NAME = "SilentPatchVC_crash.log";
+#endif
+#elif defined(_GTA_SA)
+		const char* const GAME_NAME = "SilentPatchSA";
 #if defined(SILENTPATCH_SPEEDRUN)
 		const char* const LOG_FILE_NAME = "SpeedrunSilentPatchSA_crash.log";
 #else
 		const char* const LOG_FILE_NAME = "SilentPatchSA_crash.log";
+#endif
+#else
+#error CrashLogger needs a GTA target define.
 #endif
 
 		HINSTANCE g_module = nullptr;
@@ -351,7 +370,7 @@ namespace CrashLoggerSA
 			GetLocalTime(&time);
 
 			log.Write("\r\n============================================================\r\n");
-			log.Printf("SilentPatchSA crash log\r\n");
+			log.Printf("%s crash log\r\n", GAME_NAME);
 			log.Printf("Time:      %04u-%02u-%02u %02u:%02u:%02u.%03u\r\n",
 				time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
 			log.Printf("Process:   %lu\r\n", GetCurrentProcessId());

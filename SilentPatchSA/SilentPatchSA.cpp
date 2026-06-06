@@ -34,7 +34,7 @@
 #include "FriendlyMonitorNames.h"
 #include "SVF.h"
 #include "SilentPatchFeatureConfig.h"
-#include "CrashLoggerSA.h"
+#include "CrashLogger.h"
 
 #include "debugmenu_public.h"
 #include "resource.h"
@@ -6497,8 +6497,11 @@ BOOL InjectDelayedPatches_10_Speedrun()
 		const HINSTANCE hInstance = GetModuleHandle(nullptr);
 		auto Protect = ScopedUnprotect::SectionOrFullModule(hInstance, ".text");
 
-#if ENABLE_FIX_CDSTREAM_DEADLOCK
+#if ENABLE_FIX_CDSTREAM_DEADLOCK || ENABLE_FIX_DIRTY_CARS
 		const ModuleList moduleList;
+#endif
+
+#if ENABLE_FIX_CDSTREAM_DEADLOCK
 		const HMODULE modloaderModule = moduleList.Get( L"modloader" );
 
 		FLAUtils::Init( moduleList );
@@ -6556,6 +6559,19 @@ BOOL InjectDelayedPatches_10_Speedrun()
 
 				Patch( 0x4063B5, { 0x56, 0x50 } );
 				InjectHook( 0x4063B5 + 2, CdStreamSync::CdStreamShutdownSyncObject_Stub, HookType::Call );
+			}
+		}
+#endif
+
+#if ENABLE_FIX_DIRTY_CARS
+		{
+			if ( moduleList.Get(L"ImVehFt") == nullptr )
+			{
+				// Cars getting dirty
+				// Only 1.0 and Steam
+				InjectHook( 0x5D5DB0, RemapDirt, HookType::Jump );
+				InjectHook(0x4C9648, &CVehicleModelInfo::FindEditableMaterialList, HookType::Call);
+				Patch<DWORD>(0x4C964D, 0x0FEBCE8B);
 			}
 		}
 #endif
@@ -6646,6 +6662,13 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 	InjectHook(0x744FB0, GetMyDocumentsPathSA, HookType::Jump);
 #endif
 
+#if ENABLE_FIX_USER_TRACKS_CRASH
+	// User Tracks fix
+	ReadCall( 0x4D9B66, SetVolume );
+	InjectHook(0x4D9B66, UserTracksFix);
+	InjectHook(0x4D9BB5, 0x4F2FD0);
+#endif
+
 #if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
 	// Y axis sensitivity fix
 	// By ThirteenAG
@@ -6673,6 +6696,17 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 	}
 #endif
 
+#if ENABLE_FIX_ADVANCED_DISPLAY_DUAL_MONITOR_CRASH
+	// Crash when entering advanced display options on a dual monitor machine after:
+	// - starting game on primary monitor in maximum resolution, exiting,
+	// starting again in maximum resolution on secondary monitor.
+	// Secondary monitor maximum resolution had to be greater than maximum resolution of primary monitor.
+	// Not in 1.01
+	ReadCall( 0x745B1E, orgGetNumVideoModes );
+	InjectHook(0x745B1E, GetNumVideoModes_Store);
+	InjectHook(0x745A81, GetNumVideoModes_Retrieve);
+#endif
+
 #if ENABLE_FIX_HOODLUM_RECRUITING_REPLAY
 	// Correct an improperly decrypted CPlayerPedData::operator= that broke gang recruiting after activating replays
 	// Only broken in the HOODLUM EXE and the compact EXE that carried over the bug
@@ -6692,6 +6726,15 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 			InjectHook(placeToPatch, AssignmentOp_Compact, HookType::Call);
 			Nop(placeToPatch + 5, 3);
 		}
+	}
+#endif
+
+#if ENABLE_FIX_ADVANCED_DISPLAY_32MB_VRAM_CRASH
+	// Display a fallback string if the resolution string is absent
+	// This mirrors a 1.01 fix for Advanced Display Settings crashing with 32MB VRAM
+	{
+		using namespace AdvancedDisplaySettingsCrashFix;
+		InterceptCall(0x57A071, orgAsciiToGxtChar, AsciiToGxtChar_NullCheck);
 	}
 #endif
 
@@ -6787,6 +6830,22 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 		Patch(0x58C90E, { 0x90, 0x90, 0xD9, 0x05 });
 		Patch(0x58C90E + 4, &f620);
 	}
+#endif
+
+#if ENABLE_FIX_IMG_NO_BUFFERING
+	// Remove FILE_FLAG_NO_BUFFERING from CdStreams
+	Patch<uint8_t>( 0x406BC6, 0xEB );
+#endif
+
+#if ENABLE_FIX_BLOWN_UP_VEHICLE_RENDERING
+	// Fixed blown up car rendering
+	// ONLY 1.0
+	pDirect = *(RpLight***)0x5BA573;
+	DarkVehiclesFix1_JumpBack = AddressByRegion_10<void*>(0x756D90);
+	InjectHook(0x5D993F, DarkVehiclesFix1);
+	InjectHook(0x5D9A74, DarkVehiclesFix2, HookType::Jump);
+	InjectHook(0x5D9B44, DarkVehiclesFix3, HookType::Jump);
+	InjectHook(0x5D9CB2, DarkVehiclesFix4, HookType::Jump);
 #endif
 
 #if ENABLE_FIX_SKIMMER_WINDOWS_11_24H2
@@ -10985,7 +11044,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 	if ( fdwReason == DLL_PROCESS_ATTACH )
 	{
-		CrashLoggerSA::Install(hinstDLL);
+		CrashLogger::Install(hinstDLL);
 
 		const HINSTANCE hInstance = GetModuleHandle(nullptr);
 		auto Protect = ScopedUnprotect::SectionOrFullModule(hInstance, ".text");
@@ -11010,7 +11069,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 	}
 	else if ( fdwReason == DLL_PROCESS_DETACH )
 	{
-		CrashLoggerSA::Uninstall();
+		CrashLogger::Uninstall();
 	}
 	return TRUE;
 }

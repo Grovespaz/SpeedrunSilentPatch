@@ -84,13 +84,13 @@
     <ClCompile Include="..\SilentPatch\ParseUtils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\SilentPatch\CrashLogger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\SilentPatch\FriendlyMonitorNames.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="EventsSA.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="CrashLoggerSA.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -194,7 +194,7 @@
     <ClInclude Include="SilentPatchFeatureConfig.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CrashLoggerSA.h">
+    <ClInclude Include="..\SilentPatch\CrashLogger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

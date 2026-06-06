@@ -2,7 +2,7 @@
 
 #include <windows.h>
 
-namespace CrashLoggerSA
+namespace CrashLogger
 {
 	void Install(HINSTANCE module);
 	void Uninstall();
