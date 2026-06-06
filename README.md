@@ -57,6 +57,11 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 - If the settings file is absent, the game will now default to your desktop resolution instead of 640x480x16.
 - All censorships from German and French versions of the game have been removed.
 
+Custom SpeedrunSilentPatch fixes not in original SilentPatch:
+- Allow game to boot even if your machine has no disc drives
+- Fix mouse window confinement to no longer have stutter
+
+
 ## GTASA
 
 - The mouse should not lock up randomly when exiting the menu on newer systems anymore.

@@ -11,8 +11,6 @@
 #define ENABLE_FIX_MOUSE_MENU_LOCKUP 1
 // The mouse will no longer go beyond the game window dimensions, making it possible to play the game on multi-monitor setups without problems.
 #define ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT 1
-// Use ClipCursor instead of per-frame mouse recentering, avoiding synthetic mouse deltas with non-exclusive DirectInput.
-#define ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR 1
 // DirectPlay dependency has been removed - this should improve compatibility with Windows 8 and newer.
 #define ENABLE_FIX_NO_DIRECTPLAY 1
 // The game will not crash on startup if Data Execution Prevention is enabled for all applications anymore.
@@ -43,3 +41,5 @@
 /*** SpeedrunSilentPatch exclusive fixes ***/
 // Fixed an issue where VC JP asked for a CD when running on systems without a CD-ROM drive.
 #define ENABLE_FIX_JP_NO_CDROM_DRIVE_CHECK 1
+// Use ClipCursor instead of per-frame mouse recentering, avoiding synthetic mouse deltas with non-exclusive DirectInput.
+#define ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR 1
