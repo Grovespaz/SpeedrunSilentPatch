@@ -3326,11 +3326,6 @@ void Patch_VC_JP(uint32_t width, uint32_t height)
 	Patch<DWORD>(0x5D76E4, 'A');
 #endif
 
-#if ENABLE_FIX_JP_NO_CDROM_DRIVE_CHECK
-	// Japanese VC can run without a CD-ROM drive, so don't require drives to report as DRIVE_CDROM.
-	Nop(0x5D755B, 5);
-#endif
-
 	Common::Patches::DDraw_VC_JP( width, height, aNoDesktopMode );
 }
 

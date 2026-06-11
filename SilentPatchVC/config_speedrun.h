@@ -39,7 +39,5 @@
 #define ENABLE_ENHANCEMENT_NO_CENSORSHIP 1
 
 /*** SpeedrunSilentPatch exclusive fixes ***/
-// Fixed an issue where VC JP asked for a CD when running on systems without a CD-ROM drive.
-#define ENABLE_FIX_JP_NO_CDROM_DRIVE_CHECK 1
 // Use ClipCursor instead of per-frame mouse recentering, avoiding synthetic mouse deltas with non-exclusive DirectInput.
 #define ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR 1
