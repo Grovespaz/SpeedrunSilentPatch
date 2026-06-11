@@ -23,6 +23,7 @@
 #include "Utils/Patterns.h"
 #include "Utils/ScopedUnprotect.hpp"
 #include "Utils/HookEach.hpp"
+#include "ExternalBindings.hpp"
 
 #include "debugmenu_public.h"
 
@@ -95,9 +96,7 @@ DebugMenuAPI gDebugMenuAPI;
 
 static const void*		HeadlightsFix_JumpBack;
 
-static RsGlobalType*	RsGlobal;
-
-auto 					WorldRemove = reinterpret_cast<void(*)(void*)>(hook::get_pattern("8A 43 50 56 24 07", -5));
+static ExternalRef<RsGlobalType> RsGlobal;
 
 namespace UIScales
 {
@@ -125,12 +124,17 @@ namespace UIScales
 
 	static float Width_Internal_Scale(float** factor)
 	{
-		return RsGlobal->MaximumWidth * **factor;
+		return RsGlobal.Get().MaximumWidth * **factor;
 	}
 
 	static float Height_Internal_Scale(float** factor)
 	{
-		return RsGlobal->MaximumHeight * **factor;
+		return RsGlobal.Get().MaximumHeight * **factor;
+	}
+
+	static bool HasGameBindings()
+	{
+		return EnsureBindings(RsGlobal);
 	}
 
 
@@ -284,6 +288,11 @@ namespace UIScales
 // ============= Scale the radar trace (blip) to resolution =============
 namespace RadarTraceScaling
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static void (*orgDrawRect)(const CRect&,const CRGBA&);
 
@@ -305,6 +314,11 @@ namespace RadarTraceScaling
 
 namespace ScalingFixes
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static void (*orgSetScale)(float fX, float fY);
 
@@ -353,21 +367,36 @@ namespace ScalingFixes
 	}
 }
 
-class CGang
+namespace PurpleNinesGlitchFix
 {
-public:
-	int32_t m_vehicleModel;
-	int8_t m_gangModelOverride;
-	int32_t m_gangWeapons[2];
-};
+	class CGang
+	{
+	public:
+		int32_t m_vehicleModel;
+		int8_t m_gangModelOverride;
+		int32_t m_gangWeapons[2];
+	};
 
-static_assert(sizeof(CGang) == 0x10, "Wrong size: CGang");
+	static_assert(sizeof(CGang) == 0x10, "Wrong size: CGang");
 
-static CGang* const Gangs = *hook::get_pattern<CGang*>( "0F BF 4C 24 04 8B 44 24 08 C1 E1 04 89 81", -0x60 + 2 );
-void PurpleNinesGlitchFix()
-{
-	for ( size_t i = 0; i < 9; ++i )
-		Gangs[i].m_gangModelOverride = -1;
+	static ExternalRef<CGang[]> Gangs("0F BF 4C 24 04 8B 44 24 08 C1 E1 04 89 81", -0x60 + 2);
+	static ExternalValue<uint8_t> NumGangs("83 FB ? 7C ? 83 0D", 2);
+
+	static bool HasGameBindings()
+	{
+		return EnsureBindings(Gangs, NumGangs);
+	}
+
+	static void ResetGangOverrides()
+	{
+		if (HasGameBindings())
+		{
+			const size_t numGangs = NumGangs.Get();
+			CGang* gangs = Gangs.Get();
+			for (size_t i = 0; i < numGangs; ++i)
+				gangs[i].m_gangModelOverride = -1;
+		}
+	}
 }
 
 static bool bGameInFocus = true;
@@ -395,7 +424,7 @@ void ResetMousePos()
 {
 	if ( bGameInFocus )
 	{
-		RwV2d	vecPos = { RsGlobal->MaximumWidth * 0.5f, RsGlobal->MaximumHeight * 0.5f };
+		RwV2d	vecPos = { RsGlobal.Get().MaximumWidth * 0.5f, RsGlobal.Get().MaximumHeight * 0.5f };
 		RsMouseSetPos(&vecPos);
 	}
 	orgConstructRenderList();
@@ -438,6 +467,11 @@ __declspec(naked) void HeadlightsFix()
 
 namespace PrintStringShadows
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<uintptr_t addr>
 	static const float** margin = reinterpret_cast<const float**>(Memory::DynBaseAddress(addr));
 	template<uintptr_t addr>
@@ -768,18 +802,18 @@ namespace Localization
 // ============= Call cDMAudio::IsAudioInitialised before adding one shot sounds, like in VC =============
 namespace AudioInitializedFix
 {
-	auto IsAudioInitialised = static_cast<bool(*)()>(Memory::ReadCallFrom( hook::get_pattern( "E8 ? ? ? ? 84 C0 74 ? 0F B7 47 10" ) ));
+	ExternalFunc<bool()> IsAudioInitialised;
 	void* (*operatorNew)(size_t size);
 
 	void* operatorNew_InitializedCheck( size_t size )
 	{
-		return IsAudioInitialised() ? operatorNew( size ) : nullptr;
+		return IsAudioInitialised.Call() ? operatorNew( size ) : nullptr;
 	}
 
 	void (*orgLoadAllAudioScriptObjects)(uint8_t*, uint32_t);
 	void LoadAllAudioScriptObjects_InitializedCheck( uint8_t* buffer, uint32_t a2 )
 	{
-		if ( IsAudioInitialised() )
+		if ( IsAudioInitialised.Call() )
 		{
 			orgLoadAllAudioScriptObjects( buffer, a2 );
 		}
@@ -962,7 +996,7 @@ namespace VariableResets
 		}
 
 #if ENABLE_FIX_PURPLE_NINES_GLITCH
-		PurpleNinesGlitchFix();
+		PurpleNinesGlitchFix::ResetGangOverrides();
 #endif
 	}
 
@@ -1009,6 +1043,12 @@ namespace GenerateNewPickup_ReuseObjectFix
 {
 	static void** pPickupObject;
 	static void (*orgGiveUsAPickUpObject)(int);
+	static auto WorldRemove = ExternalFunc<void (void*)>("8A 43 50 56 24 07", -5).Address();
+
+	static bool HasGameBindings()
+	{
+		return WorldRemove != nullptr;
+	}
 
 	__declspec(naked) static void GiveUsAPickUpObject_CleanUpObject()
 	{
@@ -1147,6 +1187,11 @@ namespace FixedBrightnessSaving
 // ============= Radar position and radardisc scaling =============
 namespace RadardiscFixes
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static const float* orgRadarXPos;
 
@@ -1189,6 +1234,11 @@ namespace RadardiscFixes
 // ============= Fix the onscreen counter bar X placement not scaling to resolution =============
 namespace OnscreenCounterBarFixes
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static const float* orgXPos;
 
@@ -1233,6 +1283,11 @@ namespace OnscreenCounterBarFixes
 // ============= Fix credits not scaling to resolution =============
 namespace CreditsScalingFixes
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	static const unsigned int FIXED_RES_HEIGHT_SCALE = 448;
 
 	template<std::size_t Index>
@@ -1257,6 +1312,11 @@ namespace CreditsScalingFixes
 // ============= Fix some big messages staying on screen longer at high resolutions due to a cut sliding text feature =============
 namespace SlidingTextsScalingFixes
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	static const unsigned int FIXED_RES_WIDTH_SCALE = 640;
 
 	static std::array<float, 6>* pBigMessageX;
@@ -1278,7 +1338,7 @@ namespace SlidingTextsScalingFixes
 			if (bSlidingEnabled)
 			{
 				// We divide by a constant 640.0, because the X position is meant to slide across the entire screen
-				fX = (*pBigMessageX)[BigMessageIndex] * RsGlobal->MaximumWidth / 640.0f;
+				fX = (*pBigMessageX)[BigMessageIndex] * RsGlobal.Get().MaximumWidth / 640.0f;
 				// The first draws are shadows, add the shadow offset manually. We know this function is called BEFORE the one fixing the shadow scale,
 				// so we're fine with this approach.
 				if constexpr (Index == 0)
@@ -1315,7 +1375,7 @@ namespace SlidingTextsScalingFixes
 			// We divide by a constant 640.0, because the X position is meant to slide across the entire screen
 			if (bSlidingEnabled)
 			{
-				fX -= *pOddJob2XOffset * RsGlobal->MaximumWidth / 640.0f;
+				fX -= *pOddJob2XOffset * RsGlobal.Get().MaximumWidth / 640.0f;
 			}
 			orgPrintString<Index>(fX, fY, pText);
 		}
@@ -1327,6 +1387,11 @@ namespace SlidingTextsScalingFixes
 // ============= Fix CDarkel sliding text =============
 namespace DarkelTextPlacement
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static void (*orgPrintString)(float,float,const wchar_t*);
 
@@ -1335,9 +1400,9 @@ namespace DarkelTextPlacement
 	{
 		// The origin of this text is MaximumHeight / 2, but this function is called for two distinct texts
 		// We need to distinguish them by the X coordinate
-		if (fX == RsGlobal->MaximumWidth / 2)
+		if (fX == RsGlobal.Get().MaximumWidth / 2)
 		{
-			const int origin = RsGlobal->MaximumHeight / 2;
+			const int origin = RsGlobal.Get().MaximumHeight / 2;
 			fY -= origin;
 			fY *= UIScales::Darkel::Height();
 			fY += origin;
@@ -1352,6 +1417,11 @@ namespace DarkelTextPlacement
 // ============= Fix CGarages vertical text position =============
 namespace GaragesTextPlacement
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static const float* orgYOffset;
 
@@ -1381,6 +1451,11 @@ namespace GaragesTextPlacement
 // ============= Fix "Welcome to" island loading splash X position not scaling to resolution =============
 namespace IslandSplashTextPositionFix
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static void (*orgPrintString)(float,float,const wchar_t*);
 
@@ -1388,7 +1463,7 @@ namespace IslandSplashTextPositionFix
 	static void PrintString_ScaleX(float fX, float fY, const wchar_t* pText)
 	{
 		// The origin of this text is MaximumWidth
-		const int origin = RsGlobal->MaximumWidth;
+		const int origin = RsGlobal.Get().MaximumWidth;
 		fX -= origin;
 		fX *= UIScales::Stuff2d::Width();
 		fX += origin;
@@ -1403,6 +1478,11 @@ namespace IslandSplashTextPositionFix
 // ============= Fixed most line wraps not scaling to resolution =============
 namespace FixedLineWraps
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	// Can be SetWrapx, SetRightJustifyWrap, or SetCentreSize
 	template<typename Scaler>
 	struct WrapInternal
@@ -1419,7 +1499,7 @@ namespace FixedLineWraps
 		template<std::size_t Index>
 		static void WrapFunction_RightAlign(float fLength)
 		{
-			const int origin = RsGlobal->MaximumWidth;
+			const int origin = RsGlobal.Get().MaximumWidth;
 
 			fLength -= origin;
 			fLength *= Scaler::Width();
@@ -1431,7 +1511,7 @@ namespace FixedLineWraps
 		template<std::size_t Index>
 		static void WrapFunction_FullWidth(float /*fLength*/)
 		{
-			orgWrapFunction<Index>(static_cast<float>(RsGlobal->MaximumWidth));
+			orgWrapFunction<Index>(static_cast<float>(RsGlobal.Get().MaximumWidth));
 		}
 	};
 
@@ -1501,6 +1581,11 @@ namespace BrakelightsDummy
 // ============= Fix text background padding not scaling to resolution =============
 namespace TextRectPaddingScalingFixes
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static const float* orgPaddingXSize;
 
@@ -1567,6 +1652,11 @@ namespace TextRectPaddingScalingFixes
 // ============= Fix menu texts not scaling to resolution =============
 namespace MenuManagerScalingFixes
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	template<std::size_t Index>
 	static void (*orgPrintString)(float,float,const wchar_t*);
 
@@ -1673,6 +1763,11 @@ namespace OneShotSoundReflectionPositionFix
 // ============= Fix subtitles attempting to make space for the radar and failing - finish the feature like Vice City did =============
 namespace SubtitleRadarCutoutFix
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	// This feature appears to be unfinished in GTA III, as it makes space only for the radar X position, ignoring its width.
 	// This leaves subtitles laid out in a way that makes no sense either for gameplay (as they obscure the radar) or for cutscenes (as they are not centered).
 	// This fix "completes" the feature similar to how Vice City does it.
@@ -1719,7 +1814,7 @@ namespace SubtitleRadarCutoutFix
 	{
 		if (bEnableFix && *bWideScreenOn)
 		{
-			size = RsGlobal->MaximumWidth - UIScales::HudSubtitles::Width() * *orgPaddingSize<0>;
+			size = RsGlobal.Get().MaximumWidth - UIScales::HudSubtitles::Width() * *orgPaddingSize<0>;
 		}
 		orgSetCentreSize(size);
 	}
@@ -1731,7 +1826,7 @@ namespace SubtitleRadarCutoutFix
 		{
 			if (*bWideScreenOn)
 			{
-				X = RsGlobal->MaximumWidth / 2.0f;
+				X = RsGlobal.Get().MaximumWidth / 2.0f;
 			}
 			else
 			{
@@ -1760,6 +1855,11 @@ namespace SubtitleRadarCutoutFix
 // ============= Corona flares not scaling to resolution =============
 namespace CoronaFlaresScaling
 {
+	static bool HasGameBindings()
+	{
+		return UIScales::HasGameBindings();
+	}
+
 	static void (*orgRenderOneXLUSprite)(void* x, void* y, void* z, float width, float height, void* r, void* g, void* b, void* intens, void* recipz, void* a);
 	static void RenderOneXLUSprite_Scale(void* x, void* y, void* z, float width, float height, void* r, void* g, void* b, void* intens, void* recipz, void* a)
 	{
@@ -1814,33 +1914,24 @@ namespace ClearMissionAudioFix
 }
 
 
-// ============= Apply bilinear filtering on script sprites and scale them to resolution =============
+// ============= Scale script sprites to resolution =============
 namespace ScriptSpritesScaling
 {
 	// We always scale up to resolution from 640x448, deliberately ignoring the aspect ratio or widescreen fix scaling.
 	// This is so the scale is always fullscreen, regardless of how the wsfix is configured, and so the initial state in III/VC
 	// is the same as in SA, so wsfix can work with that consistently.
 
-	// Bilinar filtering and scaling are in different hooks, so filtering can be applied unconditionally,
-	// while scaling is gated off behind an INI option.
 	static bool bScaleScriptSprites = false;
 
-	template<std::size_t Index>
-	static void (__thiscall* orgSprite2dDraw_Bilinear)(void* obj, void* rect, void* color);
-
-	template<std::size_t Index>
-	static void __fastcall Sprite2dDraw_Bilinear(void* obj, void*, void* rect, void* color)
+	static bool HasGameBindings()
 	{
-		RwScopedRenderState<rwRENDERSTATETEXTUREFILTER> state;
-
-		RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
-		orgSprite2dDraw_Bilinear<Index>(obj, rect, color);
+		return EnsureBindings(RsGlobal);
 	}
 
 	static CRect ScaleSpriteRect(CRect rect)
 	{
-		const float WidthScale = RsGlobal->MaximumWidth / 640.0f;
-		const float HeightScale = RsGlobal->MaximumHeight / 448.0f;
+		const float WidthScale = RsGlobal.Get().MaximumWidth / 640.0f;
+		const float HeightScale = RsGlobal.Get().MaximumHeight / 448.0f;
 
 		rect.x1 *= WidthScale;
 		rect.x2 *= WidthScale;
@@ -1882,11 +1973,28 @@ namespace ScriptSpritesScaling
 		}
 	}
 
-	HOOK_EACH_INIT(Bilinear_Sprite2d, orgSprite2dDraw_Bilinear, Sprite2dDraw_Bilinear);
 	HOOK_EACH_INIT(Scaling_Sprite2d, orgSprite2dDraw_Scaling, Sprite2dDraw_Scaling);
 	HOOK_EACH_INIT(Scaling_DrawRect, orgDrawRect_Scaling, DrawRect_Scaling);
 }
 
+
+// ============= Apply bilinear filtering on script sprites =============
+namespace BilinearScriptSprites
+{
+	template<std::size_t Index>
+	static void (__thiscall* orgSprite2dDraw_Bilinear)(void* obj, void* rect, void* color);
+
+	template<std::size_t Index>
+	static void __fastcall Sprite2dDraw_Bilinear(void* obj, void*, void* rect, void* color)
+	{
+		RwScopedRenderState<rwRENDERSTATETEXTUREFILTER> state;
+
+		RwRenderStateSet(rwRENDERSTATETEXTUREFILTER, (void*)rwFILTERLINEAR);
+		orgSprite2dDraw_Bilinear<Index>(obj, rect, color);
+	}
+
+	HOOK_EACH_INIT(Bilinear_Sprite2d, orgSprite2dDraw_Bilinear, Sprite2dDraw_Bilinear);
+}
 
 namespace ModelIndicesReadyHook
 {
@@ -2099,7 +2207,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_ENHANCEMENT_SUBTITLE_FIXES
 		// Fix subtitles attempting to make space for the radar and failing - finish the feature like Vice City did
-		if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"EnableSubtitleFixes", -1, wcModulePath); INIoption != -1) try
+		if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"EnableSubtitleFixes", -1, wcModulePath); INIoption != -1 && SubtitleRadarCutoutFix::HasGameBindings()) try
 		{
 			using namespace SubtitleRadarCutoutFix;
 
@@ -2153,7 +2261,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_RADAR_DISC_SCALING
 		// Fix the radar disc shadow scaling and radar X position
-		try
+		if (RadardiscFixes::HasGameBindings()) try
 		{
 			using namespace RadardiscFixes;
 
@@ -2211,7 +2319,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_ONSCREEN_COUNTER_BAR_SCALING
 	// Fix the onscreen counter bar X placement not scaling to resolution
-	try
+	if (OnscreenCounterBarFixes::HasGameBindings()) try
 	{
 		using namespace OnscreenCounterBarFixes;
 
@@ -2234,7 +2342,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_CREDITS_SCALING
 	// Fix credits not scaling to resolution
-	try
+	if (CreditsScalingFixes::HasGameBindings()) try
 	{
 		using namespace CreditsScalingFixes;
 
@@ -2272,7 +2380,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 #if ENABLE_FIX_MISSION_TEXT_DURATION || ENABLE_ENHANCEMENT_SLIDING_TEXTS
 	// Fix some big messages staying on screen longer at high resolutions due to a cut sliding text feature
 	// Also since we're touching it, optionally allow to re-enable this feature.
-	try
+	if (SlidingTextsScalingFixes::HasGameBindings()) try
 	{
 		using namespace SlidingTextsScalingFixes;
 
@@ -2342,7 +2450,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 	// Fix CDarkel sliding text
-	try
+	if (DarkelTextPlacement::HasGameBindings()) try
 	{
 		using namespace DarkelTextPlacement;
 
@@ -2358,7 +2466,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
 	// Fix CGarages vertical text position
-	try
+	if (GaragesTextPlacement::HasGameBindings()) try
 	{
 		using namespace GaragesTextPlacement;
 
@@ -2384,7 +2492,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
 	// Fix "Welcome to" island loading splash X position not scaling to resolution
-	try
+	if (IslandSplashTextPositionFix::HasGameBindings()) try
 	{
 		using namespace IslandSplashTextPositionFix;
 
@@ -2438,7 +2546,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_TEXT_BOX_PADDING_SCALING
 	// Fix text background padding not scaling to resolution
-	try
+	if (TextRectPaddingScalingFixes::HasGameBindings()) try
 	{
 		using namespace TextRectPaddingScalingFixes;
 
@@ -2488,7 +2596,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
 	// Fix menu texts not scaling to resolution
-	{
+	if (MenuManagerScalingFixes::HasGameBindings()) {
 		using namespace MenuManagerScalingFixes;
 
 		// Menu text
@@ -2520,7 +2628,7 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 
 #if ENABLE_FIX_SCRIPT_SPRITE_SCALING
 	// Apply bilinear filtering on script sprites and scale them to resolution
-	if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"ScaleScriptSprites", -1, wcModulePath); INIoption != -1) try
+	if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"ScaleScriptSprites", -1, wcModulePath); ScriptSpritesScaling::HasGameBindings() && INIoption != -1) try
 	{
 		using namespace ScriptSpritesScaling;
 
@@ -2574,7 +2682,7 @@ void Patch_III_10(uint32_t width, uint32_t height)
 {
 	using namespace Memory::DynBase;
 
-	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x584C42);
+	RsGlobal.Bind(DynBaseAddress(reinterpret_cast<RsGlobalType**>(0x584C42)));
 
 #if ENABLE_FIX_HEADLIGHT_CORONAS
 	HeadlightsFix_JumpBack = (void*)DynBaseAddress(0x5382F2);
@@ -2586,7 +2694,7 @@ void Patch_III_10(uint32_t width, uint32_t height)
 #endif
 
 #if ENABLE_FIX_PICKUP_LIGHT_GLOWS || ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
-	{
+	if (ScalingFixes::HasGameBindings()) {
 		using namespace ScalingFixes;
 
 		std::array<uintptr_t, 1> set_scale_pickups {
@@ -2610,7 +2718,7 @@ void Patch_III_10(uint32_t width, uint32_t height)
 #endif
 
 #if ENABLE_FIX_TEXT_SHADOW_SCALING
-	{
+	if (PrintStringShadows::HasGameBindings()) {
 		using namespace PrintStringShadows;
 		using namespace UIScales;
 
@@ -2641,12 +2749,14 @@ void Patch_III_10(uint32_t width, uint32_t height)
 
 #if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
-	ReadCall( 0x48E539, orgConstructRenderList );
-	InjectHook(0x48E539, ResetMousePos);
+	if (EnsureBindings(RsGlobal))
+	{
+		ReadCall( 0x48E539, orgConstructRenderList );
+		InjectHook(0x48E539, ResetMousePos);
 
-	// New wndproc
-	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581C74);
-	Patch(0x581C74, &pCustomWndProc);
+		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581C74);
+		Patch(0x581C74, &pCustomWndProc);
+	}
 #endif
 
 #if ENABLE_FIX_ARMOR_CHEAT_10
@@ -2695,7 +2805,7 @@ void Patch_III_11(uint32_t width, uint32_t height)
 {
 	using namespace Memory::DynBase;
 
-	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x584F82);
+	RsGlobal.Bind(DynBaseAddress(reinterpret_cast<RsGlobalType**>(0x584F82)));
 
 #if ENABLE_FIX_HEADLIGHT_CORONAS
 	HeadlightsFix_JumpBack = (void*)DynBaseAddress(0x538532);
@@ -2707,7 +2817,7 @@ void Patch_III_11(uint32_t width, uint32_t height)
 #endif
 
 #if ENABLE_FIX_PICKUP_LIGHT_GLOWS || ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
-	{
+	if (ScalingFixes::HasGameBindings()) {
 		using namespace ScalingFixes;
 
 		std::array<uintptr_t, 1> set_scale_pickups {
@@ -2731,7 +2841,7 @@ void Patch_III_11(uint32_t width, uint32_t height)
 #endif
 
 #if ENABLE_FIX_TEXT_SHADOW_SCALING
-	{
+	if (PrintStringShadows::HasGameBindings()) {
 		using namespace PrintStringShadows;
 		using namespace UIScales;
 
@@ -2762,12 +2872,14 @@ void Patch_III_11(uint32_t width, uint32_t height)
 
 #if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
-	ReadCall( 0x48E5F9, orgConstructRenderList );
-	InjectHook(0x48E5F9, ResetMousePos);
+	if (EnsureBindings(RsGlobal))
+	{
+		ReadCall( 0x48E5F9, orgConstructRenderList );
+		InjectHook(0x48E5F9, ResetMousePos);
 
-	// New wndproc
-	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581FB4);
-	Patch(0x581FB4, &pCustomWndProc);
+		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581FB4);
+		Patch(0x581FB4, &pCustomWndProc);
+	}
 #endif
 
 #if ENABLE_FIX_PRECISE_FRAME_LIMITER
@@ -2806,14 +2918,14 @@ void Patch_III_Steam(uint32_t width, uint32_t height)
 {
 	using namespace Memory::DynBase;
 
-	RsGlobal = *(RsGlobalType**)DynBaseAddress(0x584E72);
+	RsGlobal.Bind(DynBaseAddress(reinterpret_cast<RsGlobalType**>(0x584E72)));
 
 #if ENABLE_FIX_UNMAPPED_VERSION_PATCH
 	Patch<BYTE>(0x490FD3, 1);
 #endif
 
 #if ENABLE_FIX_PICKUP_LIGHT_GLOWS || ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING
-	{
+	if (ScalingFixes::HasGameBindings()) {
 		using namespace ScalingFixes;
 
 		std::array<uintptr_t, 1> set_scale_pickups {
@@ -2837,7 +2949,7 @@ void Patch_III_Steam(uint32_t width, uint32_t height)
 #endif
 
 #if ENABLE_FIX_TEXT_SHADOW_SCALING
-	{
+	if (PrintStringShadows::HasGameBindings()) {
 		using namespace PrintStringShadows;
 		using namespace UIScales;
 
@@ -2868,12 +2980,15 @@ void Patch_III_Steam(uint32_t width, uint32_t height)
 
 #if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
 	// RsMouseSetPos call (SA style fix)
-	ReadCall( 0x48E589, orgConstructRenderList );
-	InjectHook(0x48E589, ResetMousePos);
+	if (EnsureBindings(RsGlobal))
+	{
+		ReadCall( 0x48E589, orgConstructRenderList );
+		InjectHook(0x48E589, ResetMousePos);
 
-	// New wndproc
-	OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581EA4);
-	Patch(0x581EA4, &pCustomWndProc);
+		// New wndproc
+		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581EA4);
+		Patch(0x581EA4, &pCustomWndProc);
+	}
 #endif
 
 #if ENABLE_FIX_PRECISE_FRAME_LIMITER
@@ -2908,9 +3023,11 @@ void Patch_III_Common()
 
 	const bool bSSESupported = (cpuinfo[3] & (1 << 25)) != 0;
 
+	const bool bHasModelInfo = CVehicleModelInfo::HasGameBindings();
+
 #if ENABLE_FIX_RADAR_TRACE_SCALING
 	// Scale the radar trace (blip) to resolution
-	try
+	if (RadarTraceScaling::HasGameBindings()) try
 	{
 		using namespace RadarTraceScaling;
 
@@ -2926,7 +3043,7 @@ void Patch_III_Common()
 
 #if ENABLE_FIX_TEXT_SHADOW_SCALING
 	// Scale the subtitle shadows correctly
-	try
+	if (ScalingFixes::HasGameBindings()) try
 	{
 		using namespace ScalingFixes;
 
@@ -2981,7 +3098,7 @@ void Patch_III_Common()
 
 #if ENABLE_FIX_HIGH_FPS_FADEOUT
 	// New timers fix
-	try
+	if (CTimer::HasGameBindings()) try
 	{
 		auto hookPoint = pattern( "83 E4 F8 89 44 24 08 C7 44 24 0C 00 00 00 00 DF 6C 24 08" ).get_one();
 		auto jmpPoint = get_pattern( "DD D8 E9 37 FF FF FF DD D8" );
@@ -3187,6 +3304,8 @@ void Patch_III_Common()
 	{
 		using namespace AudioInitializedFix;
 
+		IsAudioInitialised.Bind(static_cast<bool(*)()>(Memory::ReadCallFrom(get_pattern("E8 ? ? ? ? 84 C0 74 ? 0F B7 47 10"))));
+
 		auto processCommands300 = pattern( "E8 ? ? ? ? 85 C0 59 74 ? 89 C1 E8 ? ? ? ? D9 05" ).get_one();
 		auto processCommands300_2 = pattern( "6A 14 E8 ? ? ? ? 89 C3 59 85 DB 74" ).get_one();
 		auto bulletInfoUpdate_Switch = *get_pattern<uintptr_t*>( "FF 24 85 ? ? ? ? 6A 14", 3 );
@@ -3296,7 +3415,7 @@ void Patch_III_Common()
 
 #if ENABLE_FIX_EXTRA_COMPONENT_ENVMAP
 	// Apply the environment mapping on extra components
-	try
+	if (bHasModelInfo) try
 	{
 		auto setEnvironmentMap = get_pattern("C7 83 D8 01 00 00 00 00 00 00 E8", 10);
 
@@ -3442,7 +3561,7 @@ void Patch_III_Common()
 
 #if ENABLE_FIX_TEMP_PICKUP_CLEANUP
 	// Clean up the pickup object when reusing a temporary slot
-	try
+	if (GenerateNewPickup_ReuseObjectFix::HasGameBindings()) try
 	{
 		using namespace GenerateNewPickup_ReuseObjectFix;
 
@@ -3555,7 +3674,7 @@ void Patch_III_Common()
 #if ENABLE_FIX_GARAGE_RAMPAGE_TEXT_SCALING || ENABLE_FIX_CREDITS_SCALING || ENABLE_FIX_MENU_QUESTION_TEXT_SCALING || ENABLE_FIX_TEXT_SHADOW_SCALING
 	// Fixed most line wraps not scaling to resolution
 	// Shared namespace, but separate patch applications per-function
-	{
+	if (FixedLineWraps::HasGameBindings()) {
 		using namespace FixedLineWraps;
 
 #if ENABLE_FIX_MENU_QUESTION_TEXT_SCALING
@@ -3720,7 +3839,7 @@ void Patch_III_Common()
 
 #if ENABLE_FIX_FLARE_SCALING
 	// Corona flares not scaling to resolution
-	try
+	if (CoronaFlaresScaling::HasGameBindings()) try
 	{
 		using namespace CoronaFlaresScaling;
 
@@ -3815,7 +3934,7 @@ void Patch_III_Common()
 	// Apply bilinear filtering on script sprites and scale them to resolution
 	try
 	{
-		using namespace ScriptSpritesScaling;
+		using namespace BilinearScriptSprites;
 
 		// Bilinear filtering part only, scaling part is gated off behind the INI option
 		auto sprite2d_draw_pattern = pattern("0F BF 8D ? ? ? ? 50 8D 0C 8D 00 00 00 00 81 C1 ? ? ? ? E8").count(2);
