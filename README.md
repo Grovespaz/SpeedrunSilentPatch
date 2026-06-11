@@ -58,7 +58,7 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 - All censorships from German and French versions of the game have been removed.
 
 Custom SpeedrunSilentPatch fixes not in original SilentPatch:
-- Allow game to boot even if your machine has no disc drives
+- Allow game to boot even if your machine has no disc drives (WIP)
 - Fix mouse window confinement to no longer have stutter
 
 
@@ -86,11 +86,13 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - EAX/NVIDIA splashes are now removed.
 - A 1.0 no-DVD-only bug where recruiting gang members would stop working after activating a replay has been fixed.
 
+Custom SpeedrunSilentPatch fixes not in original SilentPatch:
+- WASD-cheat preventer. By default, you have to hold Shift for any cheat to work. Other options are: Normal (like vanilla), Off (disable cheats entirely), CapsLock (cheats only work when Caps Lock is on), or ScrollLock (cheats only work when Scroll Lock is on)
+
 
 ## Nice to haves (would require additional scripting)
 
 - Forced DMCA audio removal
-- WASD cheats removal (from chaos mod?)
 - Some sort of anticheat/antitamper
 - Fix default options (steer with mouse etc)
 

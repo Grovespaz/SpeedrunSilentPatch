@@ -30,6 +30,8 @@
 #define ENABLE_FIX_STAT_COUNTERS_NEW_GAME 1
 // The "To stop Carl..." message now resets properly on New Game.
 #define ENABLE_FIX_STOP_CARL_MESSAGE_NEW_GAME 1
+// Cheats can now be disabled or gated behind Shift/CapsLock/ScrollLock to avoid accidental WASD cheat collisions.
+#define ENABLE_FIX_ACCIDENTAL_CHEATS 1
 // If the settings file is absent, the game will now default to your desktop resolution instead of 800x600x32.
 #define ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION 1
 // Remade the monitor selection dialog, adding several quality-of-life improvements - such as remembering the selected screen, modern styling, and an option to skip the dialog appearing on every game launch.

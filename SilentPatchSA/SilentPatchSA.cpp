@@ -1216,6 +1216,140 @@ char* GetMyDocumentsPathSA()
 	return pDocumentsPath;
 }
 
+#if ENABLE_FIX_ACCIDENTAL_CHEATS
+namespace CheatInput
+{
+	enum class Mode
+	{
+		Normal,
+		Off,
+		Shift,
+		CapsLock,
+		ScrollLock,
+	};
+
+	static Mode CurrentMode = Mode::Normal;
+	static bool PreviousGateOpen = false;
+	static void (__cdecl* orgAddToPCCheatString)(uint32_t) = reinterpret_cast<void(__cdecl*)(uint32_t)>(0x438480);
+
+	static char* GetCheatString()
+	{
+		return reinterpret_cast<char*>(0x969110);
+	}
+
+	static void ClearCheatString()
+	{
+		std::fill_n(GetCheatString(), 0x1E, '\0');
+	}
+
+	static bool IsGateOpen()
+	{
+		switch ( CurrentMode )
+		{
+		case Mode::Normal:
+			return true;
+		case Mode::Shift:
+			return (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+		case Mode::CapsLock:
+			return (GetKeyState(VK_CAPITAL) & 1) != 0;
+		case Mode::ScrollLock:
+			return (GetKeyState(VK_SCROLL) & 1) != 0;
+		case Mode::Off:
+		default:
+			return false;
+		}
+	}
+
+	static bool IsGateKey(uint32_t key)
+	{
+		switch ( CurrentMode )
+		{
+		case Mode::Shift:
+			return key == VK_SHIFT || key == VK_LSHIFT || key == VK_RSHIFT;
+		case Mode::CapsLock:
+			return key == VK_CAPITAL;
+		case Mode::ScrollLock:
+			return key == VK_SCROLL;
+		default:
+			return false;
+		}
+	}
+
+	static void __cdecl AddToPCCheatString(uint32_t key)
+	{
+		if ( IsGateKey(key) )
+		{
+			ClearCheatString();
+			return;
+		}
+
+		if ( IsGateOpen() )
+		{
+			orgAddToPCCheatString(key);
+		}
+	}
+
+	static void UpdateGateState()
+	{
+		if ( CurrentMode == Mode::Normal || CurrentMode == Mode::Off )
+		{
+			return;
+		}
+
+		const bool gateOpen = IsGateOpen();
+		if ( gateOpen != PreviousGateOpen )
+		{
+			ClearCheatString();
+			PreviousGateOpen = gateOpen;
+		}
+	}
+
+	static void __cdecl DoCheats()
+	{
+		const auto newStandardKeys = reinterpret_cast<const uint16_t*>(0xB731A8);
+		const auto oldStandardKeys = reinterpret_cast<const uint16_t*>(0xB72F38);
+
+		UpdateGateState();
+
+		for ( uint32_t key = 0; key < 0x100; key++ )
+		{
+			if ( newStandardKeys[key] != 0 && oldStandardKeys[key] == 0 )
+			{
+				AddToPCCheatString(key);
+			}
+		}
+	}
+
+	static Mode ParseMode(const wchar_t* value)
+	{
+		if ( lstrcmpiW(value, L"Off") == 0 ) return Mode::Off;
+		if ( lstrcmpiW(value, L"CapsLock") == 0 ) return Mode::CapsLock;
+		if ( lstrcmpiW(value, L"ScrollLock") == 0 ) return Mode::ScrollLock;
+		if ( lstrcmpiW(value, L"Normal") == 0 ) return Mode::Normal;
+		return Mode::Shift;
+	}
+
+	void ReadSettings(const wchar_t* iniPath)
+	{
+		CurrentMode = Mode::Normal;
+		PreviousGateOpen = false;
+
+		wchar_t value[32];
+		if ( GetPrivateProfileStringW(L"SilentPatch", L"EnableCheats", L"", value, _countof(value), iniPath) != 0 )
+		{
+			CurrentMode = ParseMode(value);
+		}
+	}
+
+	void InstallHooks()
+	{
+		using namespace Memory::VP;
+
+		InjectHook(AddressByRegion_10<uintptr_t>(0x53BFB8), DoCheats, HookType::Call);
+	}
+}
+#endif
+
 static LARGE_INTEGER	FrameTime;
 __declspec(safebuffers) int32_t GetTimeSinceLastFrame()
 {
@@ -6593,6 +6727,17 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 
 #if MEM_VALIDATORS
 	InstallMemValidator();
+#endif
+
+#if ENABLE_FIX_ACCIDENTAL_CHEATS
+	{
+		wchar_t wcModulePath[MAX_PATH];
+		GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), wcModulePath, _countof(wcModulePath) - 3); // Minus max required space for extension
+		PathRenameExtensionW(wcModulePath, L".ini");
+
+		CheatInput::ReadSettings(wcModulePath);
+		CheatInput::InstallHooks();
+	}
 #endif
 
 #if ENABLE_SUPPORT_DELAYED_PATCHING
