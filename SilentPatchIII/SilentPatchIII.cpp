@@ -401,6 +401,18 @@ namespace PurpleNinesGlitchFix
 
 static bool bGameInFocus = true;
 
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
+static bool bMouseClipActive = false;
+void ReleaseMouseClip()
+{
+	if ( bMouseClipActive )
+	{
+		ClipCursor(nullptr);
+		bMouseClipActive = false;
+	}
+}
+#endif
+
 static LRESULT (CALLBACK **OldWndProc)(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK CustomWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -408,6 +420,9 @@ LRESULT CALLBACK CustomWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 	{
 	case WM_KILLFOCUS:
 		bGameInFocus = false;
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
+		ReleaseMouseClip();
+#endif
 		break;
 	case WM_SETFOCUS:
 		bGameInFocus = true;
@@ -420,13 +435,81 @@ static auto* const pCustomWndProc = CustomWndProc;
 
 static void (* const RsMouseSetPos)(RwV2d*) = AddressByVersion<void(*)(RwV2d*)>(0x580D20, 0x581070, 0x580F70);
 static void (*orgConstructRenderList)();
-void ResetMousePos()
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
+HWND GetGameWindow()
+{
+	if ( !EnsureBindings(RsGlobal) || RsGlobal.Get().ps == nullptr )
+	{
+		return nullptr;
+	}
+
+	return *reinterpret_cast<HWND*>(RsGlobal.Get().ps);
+}
+
+bool IsGameWindowForeground()
+{
+	HWND window = GetGameWindow();
+	if ( window == nullptr )
+	{
+		return false;
+	}
+
+	HWND foregroundWindow = GetForegroundWindow();
+	return foregroundWindow == window || GetAncestor(foregroundWindow, GA_ROOT) == window;
+}
+
+void ResetMousePos_ClipCursor()
+{
+	HWND window = GetGameWindow();
+	if ( window == nullptr || !IsGameWindowForeground() )
+	{
+		ReleaseMouseClip();
+		return;
+	}
+
+	RECT clientRect = {};
+	if ( GetClientRect(window, &clientRect) == FALSE || clientRect.right <= clientRect.left || clientRect.bottom <= clientRect.top )
+	{
+		ReleaseMouseClip();
+		return;
+	}
+
+	POINT upperLeft = { clientRect.left, clientRect.top };
+	POINT lowerRight = { clientRect.right, clientRect.bottom };
+	if ( ClientToScreen(window, &upperLeft) == FALSE || ClientToScreen(window, &lowerRight) == FALSE )
+	{
+		ReleaseMouseClip();
+		return;
+	}
+
+	RECT clipRect = { upperLeft.x, upperLeft.y, lowerRight.x, lowerRight.y };
+	if ( ClipCursor(&clipRect) != FALSE )
+	{
+		bMouseClipActive = true;
+	}
+	else
+	{
+		ReleaseMouseClip();
+	}
+}
+#endif
+
+void ResetMousePos_Recenter()
 {
 	if ( bGameInFocus )
 	{
 		RwV2d	vecPos = { RsGlobal.Get().MaximumWidth * 0.5f, RsGlobal.Get().MaximumHeight * 0.5f };
 		RsMouseSetPos(&vecPos);
 	}
+}
+
+void ResetMousePos()
+{
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
+	ResetMousePos_ClipCursor();
+#else
+	ResetMousePos_Recenter();
+#endif
 	orgConstructRenderList();
 }
 
@@ -3980,6 +4063,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 	}
 	else if ( fdwReason == DLL_PROCESS_DETACH )
 	{
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
+		ReleaseMouseClip();
+#endif
 		CrashLogger::Uninstall();
 	}
 	return TRUE;
