@@ -38,6 +38,9 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 - If the settings file is absent, the game will now default to your desktop resolution instead of 640x480x16.
 - All censorships from German and French versions of the game have been removed.
 
+Custom SpeedrunSilentPatch fixes not in original SilentPatch:
+- Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
+
 ## GTAVC
 
 - Fixed an issue where installing the game on A: or B: drive made the game ask for the CD.
@@ -60,7 +63,7 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Allow game to boot even if your machine has no disc drives (WIP)
 - Fix mouse window confinement to no longer have stutter
-
+- Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
 
 ## GTASA
 
@@ -88,7 +91,7 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 
 Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - WASD-cheat preventer. By default, you have to hold Shift for any cheat to work. Other options are: Normal (like vanilla), Off (disable cheats entirely), CapsLock (cheats only work when Caps Lock is on), or ScrollLock (cheats only work when Scroll Lock is on)
-
+- Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
 
 ## Nice to haves (would require additional scripting)
 
@@ -97,9 +100,10 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Fix default options (steer with mouse etc)
 
 ## Thanks / Credits
-* Silent, for creating SilentPatch, the project this project is based on
-* EnglishBen, for the curation of which fixes to enable for speedrunners
-* Grovespaz, for making the code changes required
+* Silent, for creating SilentPatch, the project this project is based on.
+* EnglishBen, for the curation of which fixes to enable for speedrunners.
+* Grovespaz, for making the code changes required and adding SSP-only fixes.
+* maxorator, ThirteenAG, not6, and Miran for creating [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode) which served as inspiration for our windowed mode.
 
 # Original SilentPatch ReadMe:
 

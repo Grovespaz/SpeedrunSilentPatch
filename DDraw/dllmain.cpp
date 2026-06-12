@@ -13,6 +13,7 @@
 #include "Common_ddraw.h"
 #include "DDrawFeatureConfig.h"
 #include "Desktop.h"
+#include "WindowedModeDDraw.h"
 
 #pragma comment(lib, "shlwapi.lib")
 
@@ -32,6 +33,7 @@ extern "C" HRESULT WINAPI DirectDrawCreateEx(GUID FAR *lpGUID, LPVOID *lplpDD, R
 }
 
 char** ppUserFilesDir;
+static HINSTANCE hThisModule;
 
 void InjectHooks()
 {
@@ -42,17 +44,25 @@ void InjectHooks()
 
 	auto Protect = ScopedUnprotect::SectionOrFullModule(GetModuleHandle(nullptr), ".text");
 
+#if ENABLE_ENHANCEMENT_WINDOWED_MODE
+#define INSTALL_WINDOWED_MODE(version) WindowedModeDDraw::Install##version(hThisModule)
+#else
+#define INSTALL_WINDOWED_MODE(version) false
+#endif
+
 	if (*(DWORD*)Memory::DynBaseAddress(0x5C1E75) == 0xB85548EC)
 	{
 		// III 1.0
 		ppUserFilesDir = (char**)Memory::DynBaseAddress(0x580C16);
-		Common::Patches::DDraw_III_10( width, height, aNoDesktopMode );
+		const bool windowedMode = INSTALL_WINDOWED_MODE(III10);
+		Common::Patches::DDraw_III_10( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x5C2135) == 0xB85548EC)
 	{
 		// III 1.1
 		ppUserFilesDir = (char**)Memory::DynBaseAddress(0x580F66);
-		Common::Patches::DDraw_III_11( width, height, aNoDesktopMode );
+		const bool windowedMode = INSTALL_WINDOWED_MODE(III11);
+		Common::Patches::DDraw_III_11( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x5C6FD5) == 0xB85548EC)
 	{
@@ -65,13 +75,15 @@ void InjectHooks()
 	{
 		// VC 1.0
 		ppUserFilesDir = (char**)Memory::DynBaseAddress(0x6022AA);
-		Common::Patches::DDraw_VC_10( width, height, aNoDesktopMode );
+		const bool windowedMode = INSTALL_WINDOWED_MODE(VC10);
+		Common::Patches::DDraw_VC_10( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x667C45) == 0xB85548EC)
 	{
 		// VC 1.1
 		ppUserFilesDir = (char**)Memory::DynBaseAddress(0x60228A);
-		Common::Patches::DDraw_VC_11( width, height, aNoDesktopMode );
+		const bool windowedMode = INSTALL_WINDOWED_MODE(VC11);
+		Common::Patches::DDraw_VC_11( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x666BA5) == 0xB85548EC)
 	{
@@ -83,8 +95,11 @@ void InjectHooks()
 	{
 		// VC Japanese
 		ppUserFilesDir = (char**)Memory::DynBaseAddress(0x60204A);
-		Common::Patches::DDraw_VC_JP( width, height, aNoDesktopMode );
+		const bool windowedMode = INSTALL_WINDOWED_MODE(VCJP);
+		Common::Patches::DDraw_VC_JP( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
 	}
+
+#undef INSTALL_WINDOWED_MODE
 
 	Common::Patches::DDraw_Common();
 }
@@ -233,6 +248,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 	if ( fdwReason == DLL_PROCESS_ATTACH )
 	{
+		hThisModule = hinstDLL;
 		ApplyDDrawHooks();
 	}
 

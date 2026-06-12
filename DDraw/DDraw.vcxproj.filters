@@ -33,6 +33,9 @@
     <ClCompile Include="..\SilentPatch\Desktop.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="WindowedModeDDraw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\SilentPatch\Common_ddraw.h">
@@ -54,6 +57,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="config_speedrun.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WindowedModeDDraw.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

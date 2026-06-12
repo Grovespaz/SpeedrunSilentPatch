@@ -35,6 +35,7 @@
 #include "SVF.h"
 #include "SilentPatchFeatureConfig.h"
 #include "CrashLogger.h"
+#include "WindowedModeSA.h"
 
 #include "debugmenu_public.h"
 #include "resource.h"
@@ -6724,9 +6725,20 @@ BOOL InjectDelayedPatches_10_Speedrun()
 void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 {
 	using namespace Memory;
+	bool windowedMode = false;
 
 #if MEM_VALIDATORS
 	InstallMemValidator();
+#endif
+
+#if ENABLE_ENHANCEMENT_WINDOWED_MODE
+	{
+		wchar_t wcModulePath[MAX_PATH];
+		GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), wcModulePath, _countof(wcModulePath) - 3);
+		PathRenameExtensionW(wcModulePath, L".ini");
+
+		windowedMode = WindowedModeSA::Install(wcModulePath);
+	}
 #endif
 
 #if ENABLE_FIX_ACCIDENTAL_CHEATS
@@ -6784,14 +6796,17 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 
 #if ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 	// Default resolution to native resolution
-	const auto [width, height] = GetDesktopResolution();
-	sprintf_s(aNoDesktopMode, "Cannot find %ux%ux32 video mode", width, height);
-
-	if (width != 0 && height != 0)
+	if (!windowedMode)
 	{
-		Patch<DWORD>(0x746363, width);
-		Patch<DWORD>(0x746368, height);
-		Patch<const char*>(0x7463C8, aNoDesktopMode);
+		const auto [width, height] = GetDesktopResolution();
+		sprintf_s(aNoDesktopMode, "Cannot find %ux%ux32 video mode", width, height);
+
+		if (width != 0 && height != 0)
+		{
+			Patch<DWORD>(0x746363, width);
+			Patch<DWORD>(0x746368, height);
+			Patch<const char*>(0x7463C8, aNoDesktopMode);
+		}
 	}
 #endif
 

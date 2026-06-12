@@ -164,6 +164,7 @@
     <ClCompile Include="..\SilentPatch\Desktop.cpp" />
     <ClCompile Include="..\SilentPatch\Utils\Patterns.cpp" />
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="WindowedModeDDraw.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\SilentPatch\SilentPatch.rc" />
@@ -176,6 +177,7 @@
     <ClInclude Include="config_all_fixes.h" />
     <ClInclude Include="config_speedrun.h" />
     <ClInclude Include="DDrawFeatureConfig.h" />
+    <ClInclude Include="WindowedModeDDraw.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -242,6 +242,7 @@
     <ClCompile Include="TimerSA.cpp" />
     <ClCompile Include="VehicleSA.cpp" />
     <ClCompile Include="WaveDecoderSA.cpp" />
+    <ClCompile Include="WindowedModeSA.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\SilentPatch\debugmenu_public.h" />
@@ -278,6 +279,7 @@
     <ClInclude Include="TimerSA.h" />
     <ClInclude Include="VehicleSA.h" />
     <ClInclude Include="WaveDecoderSA.h" />
+    <ClInclude Include="WindowedModeSA.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="lunar64.png" />
