@@ -3077,6 +3077,8 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 
 void InjectDelayedPatches()
 {
+	OutputDebugStringA("SilentPatchVC: InjectDelayedPatches()\n");
+
 	auto Protect = ScopedUnprotect::SectionOrFullModule(GetModuleHandle(nullptr), ".text");
 
 	// Obtain a path to the ASI

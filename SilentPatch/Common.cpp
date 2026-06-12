@@ -174,27 +174,64 @@ namespace DelayedPatches
 
 	static BOOL (*RsEventHandler)(int, void*);
 	static void (WINAPI **OldSetPreference)(int a, int b);
+	static void (WINAPI *OldSetPreference_JP)(int a, int b);
+
+	static void PinThisModule()
+	{
+		HMODULE hDummyHandle;
+		GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN, TEXT(""), &hDummyHandle);
+	}
+
+	static void InjectDelayedPatchesOnce(const char* triggerName, bool pinThisModule)
+	{
+		if ( !std::exchange(delayedPatchesDone, true) )
+		{
+			OutputDebugStringA(triggerName);
+			InjectDelayedPatches();
+			if (pinThisModule)
+			{
+				// So we don't have to revert patches
+				PinThisModule();
+			}
+		}
+	}
+
 	void WINAPI Inject_MSS(int a, int b)
 	{
 		(*OldSetPreference)(a, b);
-		if ( !std::exchange(delayedPatchesDone, true) )
+		InjectDelayedPatchesOnce("SilentPatch: delayed patch trigger: MSS\n", true);
+	}
+
+	static void ResolveMSSSetPreference_JP()
+	{
+		if (OldSetPreference_JP == nullptr)
 		{
-			InjectDelayedPatches();
-			// So we don't have to revert patches
-			HMODULE		hDummyHandle;
-			GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN, TEXT(""), &hDummyHandle);
+			const HMODULE mssModule = GetModuleHandleA("mss32.dll");
+			if (mssModule != nullptr)
+			{
+				OldSetPreference_JP = reinterpret_cast<decltype(OldSetPreference_JP)>(GetProcAddress(mssModule, "_AIL_set_preference@8"));
+			}
 		}
 	}
+
+	void WINAPI Inject_MSS_JP(int a, int b)
+	{
+		ResolveMSSSetPreference_JP();
+		if (OldSetPreference_JP != nullptr)
+		{
+			OldSetPreference_JP(a, b);
+		}
+
+		InjectDelayedPatchesOnce("SilentPatch: delayed patch trigger: MSS JP call-site\n", true);
+	}
+
 	const auto pInjectMSS = Inject_MSS;
 
 	BOOL Inject_UAL(int a, void* b)
 	{
 		if ( RsEventHandler(a, b) )
 		{
-			if ( !std::exchange(delayedPatchesDone, true) )
-			{
-				InjectDelayedPatches();
-			}
+			InjectDelayedPatchesOnce("SilentPatch: delayed patch trigger: UAL/RsEventHandler\n", false);
 			return TRUE;
 		}
 		return FALSE;
@@ -222,9 +259,16 @@ namespace Common {
 
 #if defined(_GTA_VC)
 				const bool isVCJP = *(DWORD*)DynBaseAddress(0x601048) == 0x5E5F5D60;
-				// JP routes this MSS call through a custom .ljtsrx import-dispatch slot,
-				// not the normal MSS IAT slot used by other VC builds.
-				if (!isVCJP)
+				if (isVCJP)
+				{
+					// JP routes this MSS call through a protected import dispatcher keyed
+					// by call site, not a normal MSS IAT slot. Detour the exact call
+					// instruction and resolve the real MSS export directly.
+					const uintptr_t addr_mssCall = reinterpret_cast<uintptr_t>(addr_mssHook) - 2;
+					InjectHook( addr_mssCall, Inject_MSS_JP, HookType::Call );
+					Nop( addr_mssCall + 5, 1 );
+				}
+				else
 #endif
 				{
 					OldSetPreference = *static_cast<decltype(OldSetPreference)*>(addr_mssHook);
