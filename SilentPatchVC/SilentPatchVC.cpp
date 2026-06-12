@@ -3052,6 +3052,24 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 	TXN_CATCH();
 #endif
 
+#if ENABLE_ENHANCEMENT_REPLACE_DMCA_AMBIENCE
+	// Replace strip club and malibu club ambience with default ambience
+	// to avoid DMCA claims from copyrighted music in these areas.
+	if ( GetPrivateProfileIntW(L"SilentPatch", L"ReplaceDMCAMusicWithAmbience", 1, wcModulePath) != 0 ) try
+	{
+		// Patches the immediate values in MOV [ECX+0x3984], imm32 instructions
+		// inside cMusicManager::SetUpCorrectAmbienceTrack:
+		//   STREAMED_SOUND_STRIPCLUB_AMBIENT (17) -> STREAMED_SOUND_AMBSIL_AMBIENT (22)
+		//   STREAMED_SOUND_MALIBU_AMBIENT   (18) -> STREAMED_SOUND_AMBSIL_AMBIENT (22)
+		auto stripClubMov = pattern("C7 81 84 39 00 00 11 00 00 00").get_one();
+		Patch<uint8_t>( stripClubMov.get<void>(6), 0x16 );
+
+		auto malibuClubMov = pattern("C7 81 84 39 00 00 12 00 00 00").get_one();
+		Patch<uint8_t>( malibuClubMov.get<void>(6), 0x16 );
+	}
+	TXN_CATCH();
+#endif
+
 #if ENABLE_SUPPORT_FLA_UTILS
 	FLAUtils::Init(moduleList);
 #endif
