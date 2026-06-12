@@ -8,6 +8,7 @@
 namespace
 {
 	constexpr POINT ResolutionMin = { 160, 112 };
+	constexpr DWORD WindowedModeWindowStyle = (WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX)) | WS_VISIBLE | WS_CLIPSIBLINGS;
 
 	struct PsGlobalType
 	{
@@ -36,7 +37,9 @@ namespace
 	};
 
 	HWND Window = nullptr;
+	WNDPROC OriginalWndProc = nullptr;
 	POINT ClientSize = { 800, 600 };
+	int ForcedCursorShowCount = 0;
 	uintptr_t InitPresentationReturn = 0;
 	uintptr_t InitD3dDeviceReturn = 0;
 	std::vector<DisplayMode> VideoModesBackup;
@@ -128,6 +131,73 @@ namespace
 		RECT rect = { 0, 0, clientSize.x, clientSize.y };
 		AdjustWindowRectEx(&rect, style, FALSE, exStyle);
 		return rect;
+	}
+
+	void ForceSystemCursorVisible()
+	{
+		int cursorShowCount = ShowCursor(TRUE);
+		if (cursorShowCount > 0)
+		{
+			ShowCursor(FALSE);
+		}
+		else
+		{
+			++ForcedCursorShowCount;
+			while (cursorShowCount < 0)
+			{
+				cursorShowCount = ShowCursor(TRUE);
+				++ForcedCursorShowCount;
+			}
+		}
+		SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+	}
+
+	void RestoreSystemCursorVisibility()
+	{
+		while (ForcedCursorShowCount > 0)
+		{
+			ShowCursor(FALSE);
+			--ForcedCursorShowCount;
+		}
+	}
+
+	LRESULT CALLBACK WindowedModeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		if (message == WM_SETCURSOR)
+		{
+			const WORD hitTest = LOWORD(lParam);
+			if (hitTest != HTCLIENT)
+			{
+				ForceSystemCursorVisible();
+				return TRUE;
+			}
+			RestoreSystemCursorVisibility();
+		}
+		else if (message == WM_NCDESTROY)
+		{
+			RestoreSystemCursorVisibility();
+		}
+
+		return OriginalWndProc != nullptr
+			? CallWindowProcA(OriginalWndProc, hwnd, message, wParam, lParam)
+			: DefWindowProcA(hwnd, message, wParam, lParam);
+	}
+
+	void HookWindowProc()
+	{
+		if (Window == nullptr)
+		{
+			return;
+		}
+
+		WNDPROC currentWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(Window, GWLP_WNDPROC));
+		if (currentWndProc == WindowedModeWndProc)
+		{
+			return;
+		}
+
+		OriginalWndProc = reinterpret_cast<WNDPROC>(
+			SetWindowLongPtrW(Window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WindowedModeWndProc)));
 	}
 
 	bool BackupVideoModes(DisplayMode* videoModes, uint32_t modeCount)
@@ -360,7 +430,7 @@ namespace
 			return;
 		}
 
-		const DWORD style = WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPSIBLINGS;
+		const DWORD style = WindowedModeWindowStyle;
 		const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtrW(Window, GWL_EXSTYLE));
 		RECT rect = WindowRectForClient(ClientSize, style, exStyle);
 
@@ -455,7 +525,7 @@ namespace
 	{
 		const POINT initialClientSize = ClampClientSize({ width, height });
 
-		const DWORD style = WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPSIBLINGS;
+		const DWORD style = WindowedModeWindowStyle;
 		const DWORD exStyle = 0;
 		RECT rect = WindowRectForClient(initialClientSize, style, exStyle);
 		const LONG windowWidth = rect.right - rect.left;
@@ -467,6 +537,7 @@ namespace
 
 		Window = CreateWindowExA(exStyle, className, windowName, style, x, y, windowWidth, windowHeight,
 			nullptr, nullptr, instance, param);
+		HookWindowProc();
 		ApplyWindowHandleState();
 		return Window;
 	}
@@ -532,6 +603,8 @@ namespace WindowedModeSA
 
 		InitPresentationReturn = 0x7F6710;
 		InitD3dDeviceReturn = 0x7F6806;
+		OriginalWndProc = nullptr;
+		ForcedCursorShowCount = 0;
 
 		Memory::Patch<uint8_t>(0x746225, 0xEB);
 		PatchCall(0x7455D5, &CreateWindowHook, 6);
