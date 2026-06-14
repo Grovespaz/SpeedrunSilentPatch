@@ -41,35 +41,35 @@
 // Allows the game to run in a normal desktop window instead of exclusive fullscreen.
 #define ENABLE_ENHANCEMENT_WINDOWED_MODE 1
 
-///*** 1.0 -> 1.01 patches: ***/
-//// Fixed a crash when entering advanced display options on a dual monitor machine after: starting the game on the primary monitor in maximum resolution, exiting, starting again in maximum resolution on the secondary monitor. The secondary monitor's maximum resolution had to be greater than the maximum resolution of the primary monitor (like in the 1.01 patch).
-//#define ENABLE_FIX_ADVANCED_DISPLAY_DUAL_MONITOR_CRASH 1
-//// Fixed a crash when entering Advanced Display Settings with 32MB VRAM (like in the 1.01 patch).
-//#define ENABLE_FIX_ADVANCED_DISPLAY_32MB_VRAM_CRASH 1
-//// <kbd>Num5</kbd> is now bindable (like in the 1.01 patch).
-//#define ENABLE_FIX_NUM5_BINDABLE 1
-//// `FILE_FLAG_NO_BUFFERING` flag has been removed from IMG reading functions - speeding up streaming.
-//#define ENABLE_FIX_IMG_NO_BUFFERING 1
-//// 16:9 resolutions are now selectable (like in the 1.01 patch).
-//#define ENABLE_FIX_16_9_RESOLUTIONS 1
-//// Blown-up vehicles are now correctly colored and no longer shine (like in the 1.01 and Steam versions).
-//#define ENABLE_FIX_BLOWN_UP_VEHICLE_RENDERING 1
-//// Dancing minigame timings have been improved, now they do not lose accuracy over time depending on the PC's uptime.
-//#define ENABLE_FIX_DANCING_TIMINGS 1
-//
-///*** Supersedes an 1.01 fix: ***/
-//// Path to the User Files directory is now obtained using a dedicated API call rather than a legacy registry entry, future-proofing the games more.
-//#define ENABLE_FIX_USER_FILES_PATH 1
-//// User radio files should no longer crash while Frame Limiter is disabled. Changelog match is not confirmed; this enables SilentPatch's User Tracks fix.
-//#define ENABLE_FIX_USER_TRACKS_CRASH 1
-//
-///*** Only for broken Hoodlum executables: ***/
-//// A 1.0 no-DVD-only bug where recruiting gang members would stop working after activating a replay has been fixed (contributed by **Wesser**).
-//#define ENABLE_FIX_HOODLUM_RECRUITING_REPLAY 1
-//
-///*** Likely 1.0 -> 1.01 patches: ***/
-//// Dirty cars are now able to get clean (like in the 1.01 patch).
-//#define ENABLE_FIX_DIRTY_CARS 1
+/*** 1.0 -> 1.01 patches: ***/
+// Fixed a crash when entering advanced display options on a dual monitor machine after: starting the game on the primary monitor in maximum resolution, exiting, starting again in maximum resolution on the secondary monitor. The secondary monitor's maximum resolution had to be greater than the maximum resolution of the primary monitor (like in the 1.01 patch).
+#define ENABLE_FIX_ADVANCED_DISPLAY_DUAL_MONITOR_CRASH 1
+// Fixed a crash when entering Advanced Display Settings with 32MB VRAM (like in the 1.01 patch).
+#define ENABLE_FIX_ADVANCED_DISPLAY_32MB_VRAM_CRASH 1
+// <kbd>Num5</kbd> is now bindable (like in the 1.01 patch).
+#define ENABLE_FIX_NUM5_BINDABLE 1
+// `FILE_FLAG_NO_BUFFERING` flag has been removed from IMG reading functions - speeding up streaming.
+#define ENABLE_FIX_IMG_NO_BUFFERING 1
+// 16:9 resolutions are now selectable (like in the 1.01 patch).
+#define ENABLE_FIX_16_9_RESOLUTIONS 1
+// Blown-up vehicles are now correctly colored and no longer shine (like in the 1.01 and Steam versions).
+#define ENABLE_FIX_BLOWN_UP_VEHICLE_RENDERING 1
+// Dancing minigame timings have been improved, now they do not lose accuracy over time depending on the PC's uptime.
+#define ENABLE_FIX_DANCING_TIMINGS 1
+
+/*** Supersedes an 1.01 fix: ***/
+// Path to the User Files directory is now obtained using a dedicated API call rather than a legacy registry entry, future-proofing the games more.
+#define ENABLE_FIX_USER_FILES_PATH 1
+// User radio files should no longer crash while Frame Limiter is disabled. Changelog match is not confirmed; this enables SilentPatch's User Tracks fix.
+#define ENABLE_FIX_USER_TRACKS_CRASH 1
+
+/*** Only for broken Hoodlum executables: ***/
+// A 1.0 no-DVD-only bug where recruiting gang members would stop working after activating a replay has been fixed (contributed by **Wesser**).
+#define ENABLE_FIX_HOODLUM_RECRUITING_REPLAY 1
+
+/*** Likely 1.0 -> 1.01 patches: ***/
+// Dirty cars are now able to get clean (like in the 1.01 patch).
+#define ENABLE_FIX_DIRTY_CARS 1
 
 
 /*
