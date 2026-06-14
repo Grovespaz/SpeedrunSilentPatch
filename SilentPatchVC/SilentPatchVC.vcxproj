@@ -64,6 +64,7 @@
     <SilentPatchTargetNamePrefix Condition="'$(SilentPatchFeatureSet)'=='Speedrun'">Speedrun</SilentPatchTargetNamePrefix>
     <SilentPatchFeatureDefinitions Condition="'$(SilentPatchFeatureSet)'=='Speedrun'">SILENTPATCH_SPEEDRUN;</SilentPatchFeatureDefinitions>
   </PropertyGroup>
+  <Import Project="..\SpeedrunSilentPatch.Build.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetExt>.asi</TargetExt>
     <TargetName>$(SilentPatchTargetNamePrefix)SilentPatchVC</TargetName>

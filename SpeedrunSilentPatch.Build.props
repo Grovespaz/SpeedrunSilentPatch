@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <SpeedrunSilentPatchRoot>$(MSBuildThisFileDirectory)</SpeedrunSilentPatchRoot>
+    <OutDir>$(SpeedrunSilentPatchRoot)$(Configuration)\</OutDir>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)SpeedrunSilentPatch.Local.props" Condition="Exists('$(MSBuildThisFileDirectory)SpeedrunSilentPatch.Local.props')" />
+
+  <ItemGroup>
+    <SpeedrunSilentPatchDeployDestination Include="$(SpeedrunSilentPatchGTAIIIDir)" Condition="'$(SpeedrunSilentPatchGTAIIIDir)' != '' And ('$(MSBuildProjectName)'=='SilentPatchIII' Or '$(MSBuildProjectName)'=='DDraw')" />
+    <SpeedrunSilentPatchDeployDestination Include="$(SpeedrunSilentPatchVCDir)" Condition="'$(SpeedrunSilentPatchVCDir)' != '' And ('$(MSBuildProjectName)'=='SilentPatchVC' Or '$(MSBuildProjectName)'=='DDraw')" />
+    <SpeedrunSilentPatchDeployDestination Include="$(SpeedrunSilentPatchSADir)" Condition="'$(SpeedrunSilentPatchSADir)' != '' And '$(MSBuildProjectName)'=='SilentPatchSA'" />
+  </ItemGroup>
+
+  <Target Name="DeploySpeedrunSilentPatchOutput" AfterTargets="Build" Condition="'@(SpeedrunSilentPatchDeployDestination)' != '' And Exists('$(TargetPath)')">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="%(SpeedrunSilentPatchDeployDestination.Identity)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

@@ -64,6 +64,7 @@
   <PropertyGroup>
     <DDrawFeatureDefinitions Condition="'$(DDrawFeatureSet)'=='Speedrun'">SILENTPATCH_SPEEDRUN;</DDrawFeatureDefinitions>
   </PropertyGroup>
+  <Import Project="..\SpeedrunSilentPatch.Build.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetName>ddraw</TargetName>
   </PropertyGroup>
