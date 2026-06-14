@@ -3055,7 +3055,7 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 #if ENABLE_ENHANCEMENT_REPLACE_DMCA_AMBIENCE
 	// Replace strip club and malibu club ambience with default ambience
 	// to avoid DMCA claims from copyrighted music in these areas.
-	if ( GetPrivateProfileIntW(L"SilentPatch", L"ReplaceDMCAMusicWithAmbience", 1, wcModulePath) != 0 ) try
+	if ( GetPrivateProfileIntW(L"SilentPatch", L"ReplaceDMCAMusicWithAmbience", 0, wcModulePath) != 0 ) try
 	{
 		// Patches the immediate values in MOV [ECX+0x3984], imm32 instructions
 		// inside cMusicManager::SetUpCorrectAmbienceTrack:
