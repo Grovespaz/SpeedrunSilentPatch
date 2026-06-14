@@ -482,7 +482,8 @@ namespace
 		mode.height = static_cast<uint32_t>(ClientSize.y);
 		mode.format = D3DFMT_X8R8G8B8;
 		mode.refreshRate = 0;
-		mode.flags &= ~1u;
+		// The original windowed mode does it, but it causes the game to calculate the POV differently and drifts the crosshair
+		//mode.flags &= ~1u;
 	}
 
 	void ApplyWindowedState()
@@ -717,6 +718,7 @@ namespace
 			PatchJump(addresses.initD3dDevice, &InitD3dDevice_StoreEbp, InitD3dDevicePatchSize(addresses));
 		}
 
+		/* Disable resolution changes, not vanilla behavior and unstable.
 		if (addresses.game == Game::III)
 		{
 			Memory::DynBase::Patch<uint8_t>(addresses.resolutionColoring, 0xEB);
@@ -725,7 +727,9 @@ namespace
 		{
 			Memory::DynBase::Patch<uint16_t>(addresses.resolutionColoring, 0xE990);
 		}
+		
 		Memory::DynBase::Nop(addresses.resolutionDisabling, addresses.resolutionDisablingSize);
+		*/
 		Memory::DynBase::InterceptCall(addresses.resolutionHook, ChangeVideoModeOriginal, ChangeVideoModeHook);
 
 		return true;

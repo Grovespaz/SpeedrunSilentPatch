@@ -259,7 +259,8 @@ namespace
 		mode.height = static_cast<uint32_t>(ClientSize.y);
 		mode.format = D3DFMT_A8R8G8B8;
 		mode.refreshRate = 0;
-		mode.flags &= ~1u;
+		// The original windowed mode does it, but it causes the game to calculate the POV differently and drifts the crosshair
+		//mode.flags &= ~1u;
 	}
 
 	void RestoreVideoMode(uint32_t modeIndex)
