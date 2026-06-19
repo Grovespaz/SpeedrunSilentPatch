@@ -1234,6 +1234,11 @@ void DrawRect_HalfPixel_Steam(CRect& rect, const CRGBA& rgba)
 static ExternalRef ppUserFilesDir(AddressByVersion<const char (**)[]>(0x74503F, 0x74586F, 0x77EE50, { "6A 00 68 80 00 00 02 6A 03 6A 00 6A 01 B9 07 00 00 00", 0x12 + 1 }));
 char* GetMyDocumentsPathSA()
 {
+	if (!ppUserFilesDir.Ensure())
+	{
+		return nullptr;
+	}
+
 	static char* const pDocumentsPath = [&] () -> char* {
 		static char	cUserFilesPath[MAX_PATH];
 		char* const ppTempBufPtr = Memory::GetVersion().version == 0 ? *AddressByRegion_10<char**>(0x744FE5) : cUserFilesPath;
@@ -1277,7 +1282,12 @@ namespace CheatInput
 
 	static Mode CurrentMode = Mode::Normal;
 	static bool PreviousGateOpen = false;
-	static void (__cdecl* orgAddToPCCheatString)(uint32_t) = reinterpret_cast<void(__cdecl*)(uint32_t)>(0x438480);
+	static ExternalFunc orgAddToPCCheatString(reinterpret_cast<void(__cdecl*)(uint32_t)>(0x438480));
+
+	static bool HasGameBindings()
+	{
+		return orgAddToPCCheatString.Ensure();
+	}
 
 	static char* GetCheatString()
 	{
@@ -1332,7 +1342,7 @@ namespace CheatInput
 
 		if ( IsGateOpen() )
 		{
-			orgAddToPCCheatString(key);
+			orgAddToPCCheatString.Call(key);
 		}
 	}
 
@@ -7086,6 +7096,7 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 #endif
 
 #if ENABLE_FIX_ACCIDENTAL_CHEATS
+	if (CheatInput::HasGameBindings())
 	{
 		CheatInput::ReadSettings(wcModulePath);
 		CheatInput::InstallHooks();
