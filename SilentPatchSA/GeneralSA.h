@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "TheFLAUtils.h"
 
+#include "ExternalBindings.hpp"
+
 class CSimpleTransform
 {
 public:
@@ -99,7 +101,7 @@ public:
     virtual void	FlagToDestroyWhenNextProcessed();
 
 //private:
-	RpClump*		m_pRwObject;						// 0x18
+	RwObject*		m_pRwObject;						// 0x18
 
     /********** BEGIN CFLAGS (0x1C) **************/
     unsigned long	bUsesCollision : 1;				// does entity use collision
@@ -156,16 +158,10 @@ public:
     //********* END CEntityInfo ************//
 
 public:
-	static void*	(CEntity::*orgGetColModel)();
-
-public:
     uint8_t	GetStatus() const { return nStatus; }
     int32_t GetType() const { return nType; }
 
-
-	void* GetColModel() { return std::invoke(orgGetColModel, this); }
-
-	bool IsVisible();
+	static ExternalMethod<CEntity, bool ()> IsVisible;
 
 	void SetPositionAndAreaCode( CVector position );
 };
@@ -326,10 +322,8 @@ public:
 	float               m_fParticlesIntensity;
 
 public:
-	inline void			Render_Stub()
-	{ CObject::Render(); }
-
-	virtual void		Render() override;
+    static void         (CEntity::*orgRender_DetachedPartRenderingFix)();
+	void		        Render_DetachedPartRenderingFix();
 
 	static void					TryToFreeUpTempObjects_SilentPatch( int numObjects );
 	static std::tuple<int,int>	TryOrFreeUpTempObjects( int numObjects, bool force );
@@ -476,6 +470,11 @@ enum eWeaponType
     WEAPONTYPE_FLARE,
 };
 
+enum
+{
+    WEAPONTYPE_TWIN_PISTOLS = 1 << 11,
+};
+
 class CWeapon
 {
 public:
@@ -497,7 +496,7 @@ public:
 	int					dwModelID;
 	int					dwModelID2;
 	int					nSlot;
-	DWORD				hexFlags;
+	DWORD				m_nFlags;
 	DWORD				animStyle;
 	WORD				ammoClip;
 	DWORD				fireOffsetX;
@@ -530,7 +529,9 @@ public:
 	inline DWORD				GetWeaponSlot() 
 							{ return nSlot; };
 
-	static CWeaponInfo*		(*GetWeaponInfo)(eWeaponType weaponID, signed char bType);
+    bool IsWeaponFlagSet(uint32_t flag) const { return (m_nFlags & flag) != 0; }
+
+	static ExternalFunc<CWeaponInfo* (eWeaponType weaponID, signed char bType)> GetWeaponInfo;
 };
 
 class CShadowCamera
@@ -540,9 +541,11 @@ public:
 	RwTexture*		m_pTexture;
 
 public:
-	void			InvertRaster();
+	static ExternalMethod<CShadowCamera, void ()> InvertRaster;
 
 	RwCamera*		Update(CEntity* pEntity);
+
+    static bool     HasGameBindings() { return EnsureBindings(InvertRaster); }
 };
 
 #include <vector>
@@ -582,5 +585,9 @@ static_assert(sizeof(CEntity) == 0x38, "Wrong size: CEntity");
 static_assert(sizeof(CPhysical) == 0x138, "Wrong size: CPhysical");
 static_assert(sizeof(CObject) == 0x17C, "Wrong size: CObject");
 static_assert(sizeof(CEscalator) == 0x150, "Wrong size: CEscalator");
+
+// Binding checks
+bool HasGameBindings_DetachedPartRenderingFix();
+bool HasGameBindings_TryToFreeUpTempObjects();
 
 #endif

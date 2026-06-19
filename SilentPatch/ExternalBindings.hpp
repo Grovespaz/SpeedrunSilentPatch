@@ -14,9 +14,12 @@
 // 1. The wrappers can be bound:
 //    * On construction time with an address or a pattern.
 //    * Lazily, using a .Bind method.
+//    * By writing to a pointer returned from a .Put method.
 // 2. Re-binding is permitted.
 // 3. The results can later be checked with .Ensure().
 // 4. The APIs are explicit, with no implicit conversions or call operators. This is to ensure that unintentional dependencies are difficult to create.
+// 5. All wrappers are standard-layout types. This makes them usable inside inline assembly blocks, where they can be treated the same way the code
+//    treated the underlying storage/function pointer types previously.
 
 // ExternalRef<T> takes a pointer to an instruction operand (absolute address in x86, RIP-relative offset in x64) and can be used like a reference wrapper.
 // When compiling for x64, an optional adjust offset is accepted by the constructors and .Bind methods, specifying how many bytes after the operand the instruction has.
@@ -74,6 +77,7 @@ namespace external_bindings::details
 	struct external_method_traits<C, R(Args...)>
 	{
 		using fnptr_type = R(__thiscall*)(C*, Args...);
+		using member_fnptr_type = R(C::*)(Args...);
 		using classptr_type = C*;
 	};
 
@@ -81,6 +85,7 @@ namespace external_bindings::details
 	struct external_method_traits<C, R(Args...) const>
 	{
 		using fnptr_type = R(__thiscall*)(const C*, Args...);
+		using member_fnptr_type = R(C::*)(Args...) const;
 		using classptr_type = const C*;
 	};
 
@@ -222,6 +227,19 @@ public:
 		return m_operand_ptr;
 	}
 
+	[[nodiscard]] const void** Put(
+#ifdef _M_X64
+		std::ptrdiff_t adjust = 0
+#endif
+	) noexcept
+	{
+		m_operand_ptr = nullptr;
+#ifdef _M_X64
+		m_adjust = adjust;
+#endif
+		return &m_operand_ptr;
+	}
+
 	[[nodiscard]] bool Ensure() const noexcept
 	{
 		return m_operand_ptr != nullptr;
@@ -275,6 +293,12 @@ public:
 		return m_ptr;
 	}
 
+	[[nodiscard]] stored_type const** Put() noexcept
+	{
+		m_ptr = nullptr;
+		return &m_ptr;
+	}
+
 	[[nodiscard]] bool Ensure() const noexcept
 	{
 		return m_ptr != nullptr;
@@ -320,6 +344,12 @@ public:
 		return m_func;
 	}
 
+	[[nodiscard]] fnptr_type* Put() noexcept
+	{
+		m_func = nullptr;
+		return &m_func;
+	}
+
 	[[nodiscard]] bool Ensure() const noexcept
 	{
 		return m_func != nullptr;
@@ -340,6 +370,7 @@ class ExternalMethod : public external_bindings::details::external_method_base<E
 
 public:
 	using fnptr_type = typename traits::fnptr_type;
+	using member_fnptr_type = typename traits::member_fnptr_type;
 	using classptr_type = typename traits::classptr_type;
 
 	ExternalMethod() noexcept = default;
@@ -349,12 +380,18 @@ public:
 	{
 	}
 
+	explicit ExternalMethod(member_fnptr_type func) noexcept
+		: ExternalMethod(to_fnptr(func))
+	{
+	}
+
 	explicit ExternalMethod(std::string_view pattern_string, std::ptrdiff_t offset = 0)
 		: ExternalMethod(reinterpret_cast<fnptr_type>(external_bindings::details::try_get_pattern(pattern_string, offset)))
 	{
 	}
 
 	void Bind(fnptr_type func) noexcept { m_func = func; }
+	void Bind(member_fnptr_type func) noexcept { Bind(to_fnptr(func)); }
 
 	void Bind(std::string_view pattern_string, std::ptrdiff_t offset = 0)
 	{
@@ -364,6 +401,12 @@ public:
 	[[nodiscard]] fnptr_type Address() const noexcept
 	{
 		return m_func;
+	}
+
+	[[nodiscard]] fnptr_type* Put() noexcept
+	{
+		m_func = nullptr;
+		return &m_func;
 	}
 
 	[[nodiscard]] bool Ensure() const noexcept
@@ -376,8 +419,33 @@ public:
 	ExternalMethod& operator=(const ExternalMethod&) = delete;
 
 private:
+	static fnptr_type to_fnptr(member_fnptr_type func)
+	{
+		fnptr_type result;
+		memcpy(&result, &func, sizeof(result));
+		return result;
+	}
+
+private:
 	fnptr_type m_func = nullptr;
 };
+
+
+// ExternalFunc and ExternalMethod need deduction guides
+template<typename R, typename... Args>
+ExternalFunc(R(__cdecl*)(Args...)) -> ExternalFunc<R __cdecl(Args...)>;
+
+template<typename R, typename... Args>
+ExternalFunc(R(__stdcall*)(Args...)) -> ExternalFunc<R __stdcall(Args...)>;
+
+template<typename R, typename... Args>
+ExternalFunc(R(__fastcall*)(Args...)) -> ExternalFunc<R __fastcall(Args...)>;
+
+template<typename C, typename R, typename... Args>
+ExternalMethod(R(__thiscall*)(C*, Args...)) -> ExternalMethod<C, R(Args...)>;
+
+template<typename C, typename R, typename... Args>
+ExternalMethod(R(__thiscall*)(const C*, Args...)) -> ExternalMethod<C, R(Args...) const>;
 
 template<typename... Bindings>
 [[nodiscard]] bool EnsureBindings(const Bindings&... bindings)

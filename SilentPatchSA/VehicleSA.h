@@ -281,8 +281,9 @@ public:
 
 	bool			HasFirelaLadder() const;
 	void*			PlayPedHitSample_GetColModel();
+	static void*	(CEntity::*orgPlayPedHitSample_GetColModel)();
 
-	bool			IsLawEnforcementVehicle();
+	static ExternalMethod<CVehicle,bool() const> IsLawEnforcementVehicle;
 	CPed*			PickRandomPassenger();
 	bool			CanThisVehicleBeImpounded() const;
 
@@ -312,6 +313,8 @@ private:
 public:
 	HOOK_EACH_INIT(DoHeadLightBeam, orgDoHeadLightBeam, &DoHeadLightBeam_LightBeamFixSaveObj);
 };
+
+bool HasGameBindings_CustomCarPlateFix();
 
 class NOVMT CAutomobile : public CVehicle
 {
@@ -373,13 +376,14 @@ private:
 	void		ProcessNewsvan();
 };
 
+bool HasGameBindings_ExtraAutomobileAnimations();
+bool HasGameBindings_AutomobileFix();
+
 class NOVMT CHeli : public CAutomobile
 {
 public:
-	inline void			Render_Stub()
-	{ CHeli::Render(); }
-
-	virtual void		Render() override;
+	static void (CEntity::*orgRender_RenderRotors)();
+	void		RenderRotors();
 };
 
 class NOVMT CPlane : public CAutomobile
@@ -389,13 +393,13 @@ public:
 	float				m_fPropellerSpeed;
 
 public:
-	inline void			Render_Stub()
-	{ CPlane::Render(); }
 	inline void			PreRender_Stub()
 	{ CPlane::PreRender(); }
 
-	virtual void		Render() override;
 	virtual void		PreRender() override;
+
+	static void (CVehicle::*orgRender_RenderRotors)();
+	void				RenderRotors();
 
 	void				Fix_SilentPatch();
 
@@ -420,6 +424,8 @@ public:
 
 	static inline bool (CTrailer::*orgGetTowBarPos)(CVector& pos, bool anyPos, CVehicle* trailer);
 };
+
+bool HasGameBindings_GetTowBarPos();
 
 class NOVMT CBoat : public CVehicle
 {
@@ -455,6 +461,7 @@ private:
 
 public:
 	HOOK_EACH_INIT(RestoreCar, orgRestoreCar, &RestoreCar_SilentPatch);
+	static bool HasGameBindings_RestoreCar();
 
 private:
 	CVehicle* RestoreCar_LoadBombOwnership(CVehicle* vehicle);

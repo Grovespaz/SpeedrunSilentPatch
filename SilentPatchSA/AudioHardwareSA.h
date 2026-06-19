@@ -1,6 +1,8 @@
 #ifndef __AUDIOHARDWARE
 #define __AUDIOHARDWARE
 
+#include "ExternalBindings.hpp"
+
 // IStream
 #include <Objidl.h>
 
@@ -15,6 +17,8 @@ enum eDecoderType
 	// Custom
 	DECODER_FLAC
 };
+
+extern ExternalFunc<void (void*)> GTAdelete;
 
 // 1.0/Steam structure
 class NOVMT CAEDataStreamOld final : IStream
@@ -33,7 +37,7 @@ public:
 	void			operator delete(void* data)
 	{
 		// Call SA operator delete
-		GTAdelete(data);
+		GTAdelete.Call(data);
 	}
 
 	CAEDataStreamOld() = delete;
@@ -47,7 +51,7 @@ public:
 		}
 		if ( pFilename != nullptr )
 		{
-			GTAdelete(pFilename);
+			GTAdelete.Call(pFilename);
 			pFilename = nullptr;
 		}
 	}
@@ -89,7 +93,7 @@ public:
 	void			operator delete(void* data)
 	{
 		// Call SA operator delete
-		GTAdelete(data);
+		GTAdelete.Call(data);
 	}
 
 	CAEDataStreamNew() = delete;
@@ -103,7 +107,7 @@ public:
 		}
 		if ( pFilename != nullptr )
 		{
-			GTAdelete(pFilename);
+			GTAdelete.Call(pFilename);
 			pFilename = nullptr;
 		}
 	}
@@ -142,7 +146,9 @@ public:
 		{ return m_bUseNewStruct; }
 
 	// This is handled by GTA so we can leave it that way
-	bool				Initialise();
+	static ExternalMethod<CAEDataStream, bool()> Initialise;
+
+	static bool HasGameBindings() { return EnsureBindings(Initialise, GTAdelete); }
 
 	unsigned int		Seek(long nToSeek, int nPoint)
 	{	if ( m_bUseNewStruct ) 
@@ -181,7 +187,7 @@ public:
 		: pStream(stream)
 	{
 		if ( stream != nullptr )
-			stream->Initialise();
+			stream->Initialise.Call(stream);
 	}
 
 	inline CAEDataStream*	GetStream()

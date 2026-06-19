@@ -1237,7 +1237,7 @@ __declspec(naked) void CreateInstance_BikeFix()
 	}
 }
 
-extern char** ppUserFilesDir = AddressByVersion<char**>(0x6022AA, 0x60228A, 0x601ECA, 0x60204A);
+ExternalRef<const char[]> ppUserFilesDir(AddressByVersion<const char (**)[]>(0x6022AA, 0x60228A, 0x601ECA, 0x60204A));
 
 static LARGE_INTEGER	FrameTime;
 __declspec(safebuffers) int32_t GetTimeSinceLastFrame()
