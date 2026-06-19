@@ -3054,8 +3054,13 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 
 #if ENABLE_ENHANCEMENT_REPLACE_DMCA_AMBIENCE
 	// Replace strip club and malibu club ambience with default ambience
-	// to avoid DMCA claims from copyrighted music in these areas.
-	if ( GetPrivateProfileIntW(L"SilentPatch", L"ReplaceDMCAMusicWithAmbience", 0, wcModulePath) != 0 ) try
+	// and "Publicity Tour" cutscene audio with safe alternatives to avoid DMCA claims for streamers / YouTube.
+	const int replaceDMCAAudio = GetPrivateProfileIntW(
+		L"SilentPatch", L"ReplaceDMCAMusicWithAmbience",
+		GetPrivateProfileIntW(L"SilentPatch", L"ReplaceDMCAMusic", 0, wcModulePath),
+		wcModulePath
+	);
+	if ( replaceDMCAAudio != 0 ) try
 	{
 		// Patches the immediate values in MOV [ECX+0x3984], imm32 instructions
 		// inside cMusicManager::SetUpCorrectAmbienceTrack:
@@ -3066,6 +3071,27 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 
 		auto malibuClubMov = pattern("C7 81 84 39 00 00 12 00 00 00").get_one();
 		Patch<uint8_t>( malibuClubMov.get<void>(6), 0x16 );
+
+		wchar_t wcFistReplacementPath[MAX_PATH];
+		GetModuleFileNameW(nullptr, wcFistReplacementPath, _countof(wcFistReplacementPath));
+		PathRemoveFileSpecW(wcFistReplacementPath);
+		PathAppendW(wcFistReplacementPath, L"SSP\\FIST-DMCA.MP3");
+
+		if ( PathFileExistsW(wcFistReplacementPath) )
+		{
+			// Cutscene audio filenames are stored in fixed-size tables. Each FIST.mp3
+			// entry has 11 zero bytes after the original string, so this longer
+			// replacement still fits before the next filename.
+			auto fistCutsceneAudio = pattern(
+				"41 55 44 49 4F 5C 46 49 53 54 2E 4D 50 33 00 00 00 00"
+			).count(6);
+
+			fistCutsceneAudio.for_each_result([](auto match) {
+				Memory::VP::Patch(match.get<void>(), {
+					'S', 'S', 'P', '\\', 'F', 'I', 'S', 'T', '-', 'D', 'M', 'C', 'A', '.', 'M', 'P', '3', '\0'
+				});
+			});
+		}
 	}
 	TXN_CATCH();
 #endif
