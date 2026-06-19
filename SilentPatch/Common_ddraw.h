@@ -4,6 +4,8 @@
 
 namespace Common
 {
+	char* GetMyDocumentsPath();
+
 	namespace Patches
 	{
 		bool FixRwcseg_Patterns();

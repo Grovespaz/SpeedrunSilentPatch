@@ -4,9 +4,12 @@
 #include "WindowedModeDDraw.h"
 
 #include <Shlwapi.h>
+#include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <vector>
 
+#include "Common_ddraw.h"
 #include "Utils/MemoryMgr.h"
 
 #pragma comment(lib, "shlwapi.lib")
@@ -17,6 +20,13 @@ namespace
 	{
 		III,
 		VC,
+	};
+
+	enum class WindowedMode
+	{
+		Off,
+		Framed,
+		Borderless,
 	};
 
 	struct D3D8PresentParameters
@@ -68,6 +78,7 @@ namespace
 	{
 		Game game;
 		const wchar_t* iniName;
+		const char* windowStateIniName;
 		uintptr_t rsGlobal;
 		uintptr_t d3dDevice;
 		uintptr_t d3dPresentParams;
@@ -91,10 +102,14 @@ namespace
 	constexpr uint32_t D3DFMT_X8R8G8B8 = 22;
 	constexpr uint32_t D3DSWAPEFFECT_DISCARD = 1;
 	constexpr POINT ResolutionMin = { 160, 112 };
-	constexpr DWORD WindowedModeWindowStyle = (WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX)) | WS_VISIBLE | WS_CLIPSIBLINGS;
+	constexpr DWORD FramedWindowStyle = (WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX)) | WS_VISIBLE | WS_CLIPSIBLINGS;
+	constexpr DWORD BorderlessWindowStyle = WS_POPUP | WS_VISIBLE | WS_CLIPSIBLINGS;
+	constexpr char WindowStateSection[] = "WindowedMode";
+	constexpr char WindowStateLeftKey[] = "Left";
+	constexpr char WindowStateTopKey[] = "Top";
 
 	const Addresses III_10 = {
-		Game::III, L"SpeedrunSilentPatchIII.ini",
+		Game::III, L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
 		0x8F4360, 0x662EF0, 0x943010, 0x662F18, 0x5A0ED0, 0x5A0F30,
 		0x580F20, 6,
 		0x5B7DA1, 0x943038, Addresses::PresentationStore::Ebp,
@@ -103,7 +118,7 @@ namespace
 	};
 
 	const Addresses III_11 = {
-		Game::III, L"SpeedrunSilentPatchIII.ini",
+		Game::III, L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
 		0x8F4414, 0x662EF0, 0x9431C8, 0x662F18, 0x5A1190, 0x5A11F0,
 		0x581270, 6,
 		0x5B8061, 0x9431F0, Addresses::PresentationStore::Ebp,
@@ -112,7 +127,7 @@ namespace
 	};
 
 	const Addresses VC_10 = {
-		Game::VC, L"SpeedrunSilentPatchVC.ini",
+		Game::VC, L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
 		0x9B48D8, 0x7897A8, 0xA0FD04, 0x7897D0, 0x642B40, 0x642BA0,
 		0x5FFC75, 6,
 		0x65C0B4, 0xA0FD24, Addresses::PresentationStore::Ebx,
@@ -121,7 +136,7 @@ namespace
 	};
 
 	const Addresses VC_11 = {
-		Game::VC, L"SpeedrunSilentPatchVC.ini",
+		Game::VC, L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
 		0x9B48E0, 0x7897B0, 0xA0FD0C, 0x7897D8, 0x642B90, 0x642BF0,
 		0x5FFC95, 6,
 		0x65C104, 0xA0FD2C, Addresses::PresentationStore::Ebx,
@@ -130,7 +145,7 @@ namespace
 	};
 
 	const Addresses VC_JP = {
-		Game::VC, L"SpeedrunSilentPatchVC.ini",
+		Game::VC, L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
 		0x9B18E8, 0x7867B0, 0xA0CD14, 0x7867D8, 0x641B70, 0x641BD0,
 		0x5FF826, 5,
 		0x65B0E4, 0xA0CD34, Addresses::PresentationStore::Ebx,
@@ -154,6 +169,8 @@ namespace
 	uintptr_t InitD3dDeviceStore = 0;
 	std::vector<DisplayMode> VideoModesBackup;
 	uint32_t PreviousVideoMode = UINT32_MAX;
+	WindowedMode CurrentWindowedMode = WindowedMode::Off;
+	char WindowStatePath[MAX_PATH] = {};
 
 	using ResetFunc = HRESULT(__stdcall*)(void*, D3D8PresentParameters*);
 	ResetFunc ResetOriginal = nullptr;
@@ -166,17 +183,109 @@ namespace
 		return reinterpret_cast<T*>(Memory::DynBaseAddress(address));
 	}
 
-	bool ReadWindowedModeOption(HINSTANCE module, const wchar_t* iniName)
+	WindowedMode ParseWindowedModeOption(const wchar_t* value)
+	{
+		if (lstrcmpiW(value, L"1") == 0 || lstrcmpiW(value, L"Framed") == 0)
+		{
+			return WindowedMode::Framed;
+		}
+		if (lstrcmpiW(value, L"2") == 0 || lstrcmpiW(value, L"Borderless") == 0)
+		{
+			return WindowedMode::Borderless;
+		}
+		return WindowedMode::Off;
+	}
+
+	WindowedMode ReadWindowedModeOption(HINSTANCE module, const wchar_t* iniName)
 	{
 		wchar_t path[MAX_PATH];
 		if (GetModuleFileNameW(module, path, _countof(path)) == 0)
 		{
-			return false;
+			return WindowedMode::Off;
 		}
 
 		PathRemoveFileSpecW(path);
 		PathAppendW(path, iniName);
-		return GetPrivateProfileIntW(L"SilentPatch", L"WindowedMode", 0, path) != 0;
+
+		wchar_t value[32];
+		GetPrivateProfileStringW(L"SilentPatch", L"WindowedMode", L"0", value, _countof(value), path);
+		return ParseWindowedModeOption(value);
+	}
+
+	DWORD GetWindowedModeWindowStyle()
+	{
+		return CurrentWindowedMode == WindowedMode::Borderless ? BorderlessWindowStyle : FramedWindowStyle;
+	}
+
+	bool InitWindowStatePath(const char* iniName)
+	{
+		WindowStatePath[0] = '\0';
+
+		const char* userFilesPath = Common::GetMyDocumentsPath();
+		if (userFilesPath == nullptr || userFilesPath[0] == '\0')
+		{
+			return false;
+		}
+
+		strcpy_s(WindowStatePath, userFilesPath);
+		if (PathAppendA(WindowStatePath, iniName) == FALSE)
+		{
+			WindowStatePath[0] = '\0';
+			return false;
+		}
+		return true;
+	}
+
+	bool HasWindowStatePath()
+	{
+		return WindowStatePath[0] != '\0';
+	}
+
+	bool ParseProfileLong(const char* value, LONG* result)
+	{
+		char* end = nullptr;
+		const long parsed = strtol(value, &end, 10);
+		if (end == value)
+		{
+			return false;
+		}
+		while (*end == ' ' || *end == '\t')
+		{
+			++end;
+		}
+		if (*end != '\0')
+		{
+			return false;
+		}
+		*result = static_cast<LONG>(parsed);
+		return true;
+	}
+
+	bool ReadProfileLong(const char* key, LONG* value)
+	{
+		if (!HasWindowStatePath())
+		{
+			return false;
+		}
+
+		char buffer[32];
+		if (GetPrivateProfileStringA(WindowStateSection, key, "", buffer, _countof(buffer), WindowStatePath) == 0)
+		{
+			return false;
+		}
+		return ParseProfileLong(buffer, value);
+	}
+
+	void WriteProfileLong(const char* key, LONG value)
+	{
+		if (!HasWindowStatePath())
+		{
+			return;
+		}
+
+		char buffer[32];
+		sprintf_s(buffer, "%ld", value);
+		WritePrivateProfileStringA(WindowStateSection, key, buffer, WindowStatePath);
 	}
 
 	RECT GetNearestMonitorRect(POINT point)
@@ -188,6 +297,90 @@ namespace
 			info.rcWork = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
 		}
 		return info.rcWork;
+	}
+
+	bool IsWindowRectSane(const RECT& rect)
+	{
+		if (rect.right <= rect.left || rect.bottom <= rect.top)
+		{
+			return false;
+		}
+
+		HMONITOR monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONULL);
+		if (monitor == nullptr)
+		{
+			return false;
+		}
+
+		MONITORINFO info = { sizeof(info) };
+		if (GetMonitorInfoW(monitor, &info) == FALSE)
+		{
+			return false;
+		}
+
+		RECT visibleRect;
+		if (IntersectRect(&visibleRect, &rect, &info.rcWork) == FALSE)
+		{
+			return false;
+		}
+
+		const LONG windowWidth = rect.right - rect.left;
+		const LONG windowHeight = rect.bottom - rect.top;
+		const LONG minVisibleWidth = windowWidth < 64 ? windowWidth : 64;
+		const LONG minVisibleHeight = windowHeight < 64 ? windowHeight : 64;
+		return (visibleRect.right - visibleRect.left) >= minVisibleWidth &&
+			(visibleRect.bottom - visibleRect.top) >= minVisibleHeight;
+	}
+
+	bool GetSavedWindowPosition(LONG windowWidth, LONG windowHeight, POINT* position)
+	{
+		LONG left = 0;
+		LONG top = 0;
+		if (!ReadProfileLong(WindowStateLeftKey, &left) || !ReadProfileLong(WindowStateTopKey, &top))
+		{
+			return false;
+		}
+
+		const RECT savedRect = { left, top, left + windowWidth, top + windowHeight };
+		if (!IsWindowRectSane(savedRect))
+		{
+			return false;
+		}
+
+		position->x = left;
+		position->y = top;
+		return true;
+	}
+
+	POINT GetDefaultWindowPosition(LONG windowWidth, LONG windowHeight, POINT centerPoint)
+	{
+		POINT position = {};
+		if (GetSavedWindowPosition(windowWidth, windowHeight, &position))
+		{
+			return position;
+		}
+
+		const RECT monitorRect = GetNearestMonitorRect(centerPoint);
+		position.x = monitorRect.left + ((monitorRect.right - monitorRect.left) - windowWidth) / 2;
+		position.y = monitorRect.top + ((monitorRect.bottom - monitorRect.top) - windowHeight) / 2;
+		return position;
+	}
+
+	void SaveWindowPosition(HWND hwnd)
+	{
+		if (!HasWindowStatePath() || hwnd == nullptr || IsIconic(hwnd) != FALSE)
+		{
+			return;
+		}
+
+		RECT rect;
+		if (GetWindowRect(hwnd, &rect) == FALSE || !IsWindowRectSane(rect))
+		{
+			return;
+		}
+
+		WriteProfileLong(WindowStateLeftKey, rect.left);
+		WriteProfileLong(WindowStateTopKey, rect.top);
 	}
 
 	POINT ClampClientSize(POINT size)
@@ -252,7 +445,12 @@ namespace
 		}
 		else if (message == WM_NCDESTROY)
 		{
+			SaveWindowPosition(hwnd);
 			RestoreSystemCursorVisibility();
+		}
+		else if (message == WM_EXITSIZEMOVE)
+		{
+			SaveWindowPosition(hwnd);
 		}
 
 		return OriginalWndProc != nullptr
@@ -556,7 +754,7 @@ namespace
 			return;
 		}
 
-		DWORD style = WindowedModeWindowStyle;
+		DWORD style = GetWindowedModeWindowStyle();
 		DWORD exStyle = static_cast<DWORD>(GetWindowLongPtrW(Window, GWL_EXSTYLE));
 		RECT rect = WindowRectForClient(ClientSize, style, exStyle);
 
@@ -568,12 +766,10 @@ namespace
 			(currentRect.left + currentRect.right) / 2,
 			(currentRect.top + currentRect.bottom) / 2
 		};
-		const RECT monitorRect = GetNearestMonitorRect(windowCenter);
-		const int x = monitorRect.left + ((monitorRect.right - monitorRect.left) - windowWidth) / 2;
-		const int y = monitorRect.top + ((monitorRect.bottom - monitorRect.top) - windowHeight) / 2;
+		const POINT position = GetDefaultWindowPosition(windowWidth, windowHeight, windowCenter);
 
 		SetWindowLongPtrW(Window, GWL_STYLE, style);
-		SetWindowPos(Window, nullptr, x, y, windowWidth, windowHeight,
+		SetWindowPos(Window, nullptr, position.x, position.y, windowWidth, windowHeight,
 			SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 	}
 
@@ -626,17 +822,16 @@ namespace
 	{
 		const POINT initialClientSize = ClampClientSize({ width, height });
 
-		const DWORD style = WindowedModeWindowStyle;
+		const DWORD style = GetWindowedModeWindowStyle();
 		const DWORD exStyle = 0;
 		RECT rect = WindowRectForClient(initialClientSize, style, exStyle);
 		const LONG windowWidth = rect.right - rect.left;
 		const LONG windowHeight = rect.bottom - rect.top;
 
-		RECT monitorRect = GetNearestMonitorRect({ GetSystemMetrics(SM_CXSCREEN) / 2, GetSystemMetrics(SM_CYSCREEN) / 2 });
-		const int x = monitorRect.left + ((monitorRect.right - monitorRect.left) - windowWidth) / 2;
-		const int y = monitorRect.top + ((monitorRect.bottom - monitorRect.top) - windowHeight) / 2;
+		const POINT position = GetDefaultWindowPosition(windowWidth, windowHeight,
+			{ GetSystemMetrics(SM_CXSCREEN) / 2, GetSystemMetrics(SM_CYSCREEN) / 2 });
 
-		Window = CreateWindowExA(exStyle, className, windowName, style, x, y, windowWidth, windowHeight,
+		Window = CreateWindowExA(exStyle, className, windowName, style, position.x, position.y, windowWidth, windowHeight,
 			nullptr, nullptr, instance, param);
 		HookWindowProc();
 		ApplyWindowHandleState();
@@ -682,7 +877,8 @@ namespace
 
 	bool Install(const Addresses& addresses, HINSTANCE module)
 	{
-		if (!ReadWindowedModeOption(module, addresses.iniName))
+		CurrentWindowedMode = ReadWindowedModeOption(module, addresses.iniName);
+		if (CurrentWindowedMode == WindowedMode::Off)
 		{
 			return false;
 		}
@@ -693,6 +889,7 @@ namespace
 		VideoModesBackup.clear();
 		PreviousVideoMode = UINT32_MAX;
 		ChangeVideoModeOriginal = nullptr;
+		InitWindowStatePath(addresses.windowStateIniName);
 		InitPresentationReturn = Memory::DynBaseAddress(addresses.initPresentationParams + 6);
 		InitPresentationStore = Memory::DynBaseAddress(addresses.initPresentationParamsStore);
 		InitD3dDeviceReturn = Memory::DynBaseAddress(addresses.initD3dDevice + InitD3dDevicePatchSize(addresses));
