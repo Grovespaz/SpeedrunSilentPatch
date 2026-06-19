@@ -6623,6 +6623,47 @@ BOOL InjectDelayedPatches_NewBinaries()
 static char		aNoDesktopMode[64];
 
 #if defined(SILENTPATCH_SPEEDRUN)
+#if ENABLE_FIX_CPU_AFFINITY
+static DWORD_PTR ReadProcessAffinityMaskOption(const wchar_t* iniPath)
+{
+	constexpr DWORD_PTR DEFAULT_AFFINITY_MASK = 1;
+
+	wchar_t value[32];
+	GetPrivateProfileStringW(L"SilentPatch", L"CpuAffinityMask", L"1", value, _countof(value), iniPath);
+
+	int parsedValue = 0;
+	if (StrToIntExW(value, STIF_SUPPORT_HEX, &parsedValue) == FALSE || parsedValue < 0)
+	{
+		return DEFAULT_AFFINITY_MASK;
+	}
+	return static_cast<DWORD_PTR>(parsedValue);
+}
+
+static void ApplyConfiguredProcessAffinity(const wchar_t* iniPath)
+{
+	const DWORD_PTR requestedAffinity = ReadProcessAffinityMaskOption(iniPath);
+	if (requestedAffinity == 0)
+	{
+		return;
+	}
+
+	DWORD_PTR processAffinity = 0;
+	DWORD_PTR systemAffinity = 0;
+	DWORD_PTR affinityToApply = requestedAffinity;
+	if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinity, &systemAffinity) != FALSE)
+	{
+		const DWORD_PTR availableAffinity = processAffinity != 0 ? processAffinity : systemAffinity;
+		const DWORD_PTR compatibleAffinity = requestedAffinity & availableAffinity;
+		if (compatibleAffinity != 0)
+		{
+			affinityToApply = compatibleAffinity;
+		}
+	}
+
+	SetProcessAffinityMask(GetCurrentProcess(), affinityToApply);
+}
+#endif
+
 BOOL InjectDelayedPatches_10_Speedrun()
 {
 	if ( !IsAlreadyRunning() )
@@ -6726,27 +6767,26 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 {
 	using namespace Memory;
 	bool windowedMode = false;
+	wchar_t wcModulePath[MAX_PATH];
+	GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), wcModulePath, _countof(wcModulePath) - 3);
+	PathRenameExtensionW(wcModulePath, L".ini");
 
 #if MEM_VALIDATORS
 	InstallMemValidator();
 #endif
 
+#if ENABLE_FIX_CPU_AFFINITY
+	ApplyConfiguredProcessAffinity(wcModulePath);
+#endif
+
 #if ENABLE_ENHANCEMENT_WINDOWED_MODE
 	{
-		wchar_t wcModulePath[MAX_PATH];
-		GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), wcModulePath, _countof(wcModulePath) - 3);
-		PathRenameExtensionW(wcModulePath, L".ini");
-
 		windowedMode = WindowedModeSA::Install(wcModulePath);
 	}
 #endif
 
 #if ENABLE_FIX_ACCIDENTAL_CHEATS
 	{
-		wchar_t wcModulePath[MAX_PATH];
-		GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), wcModulePath, _countof(wcModulePath) - 3); // Minus max required space for extension
-		PathRenameExtensionW(wcModulePath, L".ini");
-
 		CheatInput::ReadSettings(wcModulePath);
 		CheatInput::InstallHooks();
 	}
