@@ -43,6 +43,8 @@
 #define ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES 1
 // Allows the game to run in a normal desktop window instead of exclusive fullscreen.
 #define ENABLE_ENHANCEMENT_WINDOWED_MODE 1
+// Replaces DMCA-sensitive ambience tracks with neutral ambience.
+#define ENABLE_ENHANCEMENT_REPLACE_DMCA_AMBIENCE 1
 
 /*** 1.0 -> 1.01 patches: ***/
 // Fixed a crash when entering advanced display options on a dual monitor machine after: starting the game on the primary monitor in maximum resolution, exiting, starting again in maximum resolution on the secondary monitor. The secondary monitor's maximum resolution had to be greater than the maximum resolution of the primary monitor (like in the 1.01 patch).

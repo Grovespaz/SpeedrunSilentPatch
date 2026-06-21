@@ -1962,6 +1962,68 @@ static int64_t AudioUtilsGetCurrentTimeInMs()
 	return ((currentTime.QuadPart - UtilsStartTime.QuadPart) * 1000) / UtilsFrequency.QuadPart;
 }
 
+// ============= DMCA-sensitive beat tracks =============
+namespace DMCABeatTracks
+{
+	static void (__thiscall* orgPreloadBeatTrack)(void*, int32_t);
+	static void (__thiscall* orgPlayPreloadedBeatTrack)(void*, uint8_t);
+	static void (__thiscall* orgSetChannelVolume)(void*, int16_t, uint16_t, float, uint8_t);
+
+	static int32_t ExpectedMutedStreamID = -1;
+	static int32_t MutedStreamID = -1;
+
+	static bool ShouldMuteExplicitBeatTrack(int32_t trackID)
+	{
+		switch (trackID)
+		{
+		case 0:
+		case 1:
+		case 2:
+		case 3:
+		case 4:
+		case 6:
+		case 7:
+		case 8:
+		case 13:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	static int32_t GetPreloadedStreamID()
+	{
+		return *reinterpret_cast<int32_t*>(0x8AE560);
+	}
+
+	static void __fastcall PreloadBeatTrack_Explicit(void* audioManager, void*, int32_t trackID)
+	{
+		orgPreloadBeatTrack(audioManager, trackID);
+		ExpectedMutedStreamID = ShouldMuteExplicitBeatTrack(trackID) ? GetPreloadedStreamID() : -1;
+	}
+
+	static void __fastcall PlayPreloadedBeatTrack_Explicit(void* audioManager, void*, uint8_t flags)
+	{
+		MutedStreamID = ExpectedMutedStreamID;
+		ExpectedMutedStreamID = -1;
+		orgPlayPreloadedBeatTrack(audioManager, flags);
+	}
+
+	static void __fastcall SetBeatTrackVolume(void* audioHardware, void*, int32_t channel, uint32_t slot, float volume, uint32_t flags)
+	{
+		if (MutedStreamID != -1)
+		{
+			if (GetPreloadedStreamID() == MutedStreamID)
+			{
+				volume = -100.0f;
+			}
+			MutedStreamID = -1;
+		}
+
+		orgSetChannelVolume(audioHardware, static_cast<int16_t>(channel), static_cast<uint16_t>(slot), volume, static_cast<uint8_t>(flags));
+	}
+}
+
 // ============= Minimal HUD changes =============
 namespace MinimalHUD
 {
@@ -7103,6 +7165,40 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 	}
 #endif
 
+#if ENABLE_ENHANCEMENT_REPLACE_DMCA_AMBIENCE
+	// Replace casino, club, stadium, and strip club ambience with neutral ambience,
+	// and mute DMCA-sensitive beat tracks while preserving their timing data.
+	const int replaceDMCAAudio = GetPrivateProfileIntW(
+		L"SilentPatch", L"ReplaceDMCAMusicWithAmbience",
+		GetPrivateProfileIntW(L"SilentPatch", L"ReplaceDMCAMusic", 0, wcModulePath),
+		wcModulePath
+	);
+	if (replaceDMCAAudio != 0)
+	{
+		// Patch the immediate values in mov edi, imm32 instructions
+		// inside UpdateAmbienceTrackAndVolume:
+		//   Zone 5, Beach Party background song (140)     -> ambience track 154
+		//   Zone 13, Lowrider challenge song (157)        -> ambience track 154
+		//   Zone 17, Casino bkgd medley (146)             -> ambience track 154
+		//   Zones 28/29, Dance Club bkgd medley (147)     -> ambience track 154
+		//   Zone 34, Pleasure Domes background music (162)-> ambience track 154
+		//   Zone 41, Stadium event bkgd medley (169)      -> ambience track 154
+		//   Zone 66, Strip Club background melody (170)   -> ambience track 154
+		Patch<int32_t>(0x4D6FB1, 154);
+		Patch<int32_t>(0x4D6FC3, 154);
+		Patch<int32_t>(0x4D70C6, 154);
+		Patch<int32_t>(0x4D6F94, 154);
+		Patch<int32_t>(0x4D7113, 154);
+		Patch<int32_t>(0x4D6F88, 154);
+		Patch<int32_t>(0x4D711A, 154);
+
+		using namespace DMCABeatTracks;
+		InterceptCall(0x4777FE, orgPreloadBeatTrack, PreloadBeatTrack_Explicit); // 0x0952 PRELOAD_BEAT_TRACK
+		InterceptCall(0x47782A, orgPlayPreloadedBeatTrack, PlayPreloadedBeatTrack_Explicit); // 0x0954 PLAY_BEAT_TRACK
+		InterceptCall(0x4DBF47, orgSetChannelVolume, SetBeatTrackVolume);
+	}
+#endif
+
 #if ENABLE_SUPPORT_DELAYED_PATCHING
 	// IsAlreadyRunning needs to be read relatively late - the later, the better
 	{
@@ -7147,7 +7243,7 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 
 #if ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 	// Default resolution to native resolution
-	if (!windowedMode)
+	if (!windowedMode || !WindowedModeSA::IsFramedMode())
 	{
 		const auto [width, height] = GetDesktopResolution();
 		sprintf_s(aNoDesktopMode, "Cannot find %ux%ux32 video mode", width, height);
