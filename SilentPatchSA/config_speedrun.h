@@ -6,6 +6,8 @@
 
 // The mouse should not lock up randomly when exiting the menu on newer systems anymore.
 #define ENABLE_FIX_MOUSE_MENU_LOCKUP 1
+// The mouse will no longer go beyond the game window dimensions, making it possible to play the game on multi-monitor setups without problems.
+#define ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT 1
 // DirectPlay dependency has been removed - this should improve compatibility with Windows 8 and newer.
 #define ENABLE_FIX_NO_DIRECTPLAY 1
 // Fixed a crash on car explosions - most likely to happen when playing with a multi-monitor setup.

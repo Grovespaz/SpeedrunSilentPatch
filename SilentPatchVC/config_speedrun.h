@@ -39,7 +39,3 @@
 #define ENABLE_ENHANCEMENT_NO_CENSORSHIP 1
 // Replace strip club and malibu club ambience with default ambience, to prevent copyrighted audio from causing DMCA claims on streaming platforms.
 #define ENABLE_ENHANCEMENT_REPLACE_DMCA_AMBIENCE 1
-
-/*** SpeedrunSilentPatch exclusive fixes ***/
-// Use ClipCursor instead of per-frame mouse recentering, avoiding synthetic mouse deltas with non-exclusive DirectInput.
-#define ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR 1

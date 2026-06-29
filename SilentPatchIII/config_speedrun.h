@@ -30,7 +30,3 @@
 #define ENABLE_ENHANCEMENT_NO_CENSORSHIP 1
 // The game will no longer ask for a CD when all audio files are copied to the disk.
 #define ENABLE_FIX_NO_CD 1
-
-/*** SpeedrunSilentPatch exclusive fixes ***/
-// Use ClipCursor instead of per-frame mouse recentering, avoiding synthetic mouse deltas with non-exclusive DirectInput.
-#define ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR 1

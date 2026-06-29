@@ -111,7 +111,9 @@ namespace ModCompat
 		// Resolves a re-route if it comes from a no-CD executable
 		uintptr_t GetFunctionAddrIfRerouted(uintptr_t address)
 		{
-			if (*reinterpret_cast<const uint8_t*>(address) == 0xE9)
+			uint8_t jmp;
+			Memory::Read(address, jmp);
+			if (jmp == 0xE9u)
 			{
 				uintptr_t jumpDestination;
 				Memory::ReadCall(address, jumpDestination);
@@ -361,7 +363,19 @@ struct AlphaObjectInfo
 	{ return a.fCompareValue < b.fCompareValue; }
 };
 
-struct PsGlobalType;
+struct PsGlobalType
+{
+	HWND	window;
+	DWORD	instance;
+	DWORD	fullscreen;
+	DWORD	lastMousePos_X;
+	DWORD	lastMousePos_Y;
+	DWORD	unk;
+	DWORD	diInterface;
+	DWORD	diMouse;
+	void*	diDevice1;
+	void*	diDevice2;
+};
 
 struct RsGlobalType
 {
@@ -390,6 +404,7 @@ ExternalFunc			ClearAtomicFlag(AddressByVersion<void(*)(RpAtomic*, int)>(0x73231
 ExternalFunc			IsPlayerOnAMission(AddressByVersion<bool(*)()>(0x464D50, {"85 C0 74 0C 83 B8 ? ? ? ? ? 75 03 B0 01 C3", -5}));
 
 ExternalFunc			WorldRemove(AddressByVersion<void(*)(CEntity*)>(0x563280, 0, 0x57D370, { "8B 06 8B 50 0C 8B CE FF D2 8A 46 36 24 07 3C 01 76 0D", -7 }));
+ExternalFunc			IsInPlayersGroup(AddressByVersion<bool(*)(const CPed* pPed)>(0x5F7F10, { "83 B9 80 04 00 00 00 75", -6 }));
 
 
 // SA variables
@@ -415,6 +430,9 @@ ExternalRef				HudColour(AddressByVersion<CRGBA (**)[]>(0x58ADF6, 0x58B5C6, 0x44
 ExternalRef				ms_weaponPedsForPC(AddressByVersion<CLinkListSA<CPed*>**>(0x53EACA, 0x53EF6A, 0x551101));
 
 ExternalRef				bDrawCrossHair(AddressByVersion<uint32_t**>(0x58E7BF + 2, {"83 3D ? ? ? ? ? 74 29", 2}));
+
+// Technically part of CMenuManager, but we only need this boolean
+static ExternalRef		bIsFrontEndActive(AddressByVersion<bool**>(0x53E9AC + 1, {"80 3D ? ? ? ? 00 0F 85 ? ? ? ? B9", 2}));
 
 DebugMenuAPI gDebugMenuAPI;
 static bool IgnoresWeaponPedsForPCFix();
@@ -2054,52 +2072,6 @@ static CVehicle* FindPlayerVehicle_RCWrap( int playerID, bool )
 	return FindPlayerVehicle( playerID, true );
 }
 
-// ============= Credits! =============
-namespace Credits
-{
-	static void (*PrintCreditText)(float scaleX, float scaleY, const char* text, unsigned int& pos, float timeOffset, bool isHeader);
-	static void (*PrintCreditText_Hooked)(float scaleX, float scaleY, const char* text, unsigned int& pos, float timeOffset, bool isHeader);
-
-	static void PrintCreditSpace( float scale, unsigned int& pos )
-	{
-		pos += static_cast<unsigned int>( scale * 25.0f );
-	}
-
-	constexpr char xvChar(const char ch)
-	{
-		constexpr uint8_t xv = SILENTPATCH_REVISION_ID;
-		return ch ^ xv;
-	}
-
-	constexpr char operator "" _xv(const char ch)
-	{
-		return xvChar(ch);
-	}
-
-	static void PrintSPCredits( float scaleX, float scaleY, const char* text, unsigned int& pos, float timeOffset, bool isHeader )
-	{
-		// Original text we intercepted
-		PrintCreditText_Hooked( scaleX, scaleY, text, pos, timeOffset, isHeader );
-		PrintCreditSpace( 1.5f, pos );
-
-		{
-			char spText[] = { 'A'_xv, 'N'_xv, 'D'_xv, '\0'_xv };
-
-			for ( auto& ch : spText ) ch = xvChar(ch);
-			PrintCreditText( scaleX, scaleY, spText, pos, timeOffset, true );
-		}
-
-		PrintCreditSpace( 1.5f, pos );
-
-		{
-			char spText[] = { 'A'_xv, 'd'_xv, 'r'_xv, 'i'_xv, 'a'_xv, 'n'_xv, ' '_xv, '\"'_xv, 'S'_xv, 'i'_xv, 'l'_xv, 'e'_xv, 'n'_xv, 't'_xv, '\"'_xv, ' '_xv,
-							'Z'_xv, 'd'_xv, 'a'_xv, 'n'_xv, 'o'_xv, 'w'_xv, 'i'_xv, 'c'_xv, 'z'_xv, '\0'_xv };
-
-			for ( auto& ch : spText ) ch = xvChar(ch);
-			PrintCreditText( scaleX, scaleY, spText, pos, timeOffset, false );
-		}
-	}
-}
 
 // ============= Bicycle fire fix =============
 namespace BicycleFire
@@ -4109,6 +4081,21 @@ namespace TimecycDatMissingDataFix
 }
 
 
+// ============= Stop gang wars clearing the friendly entity blips when the gang war ends =============
+namespace AttackWaveFriendlyBlipsFix
+{
+	static bool HasGameBindings()
+	{
+		return EnsureBindings(IsInPlayersGroup);
+	}
+
+	static bool __fastcall ClearBlipsOnDeath_AndNotIsInPlayersGroup(const CPed* ped)
+	{
+		return ped->m_nPedFlags.bClearRadarBlipOnDeath && !IsInPlayersGroup.Call(ped);
+	}
+}
+
+
 // ============= Speech system fixes =============
 namespace SpeechSystemFixes
 {
@@ -4723,6 +4710,110 @@ namespace FortCarsonBeagle
 			*modelID = 481;
 		}
 		orgLoadCarGenerator(pFileCarGen, level);
+	}
+}
+
+
+// ============= Clip the cursor to the game window bounds =============
+namespace ClipCursorToGameWindow
+{
+	static bool bWindowActive = false, bWantsCursorClip = false, bCursorIsClipped = false;
+
+	static void ConfineCursor()
+	{
+		if (!bCursorIsClipped)
+		{
+			HWND window = RsGlobal.Get().ps->window;
+			if (window != nullptr)
+			{
+				RECT clientRect;
+				GetClientRect(window, &clientRect);
+
+				// Make the coordinates inclusive, so grabbing the right/bottom side of the screen is not possible
+				// (happens on high DPI displays otherwise)
+				clientRect.right -= 1;
+				clientRect.bottom -= 1;
+
+				MapWindowPoints(window, nullptr, reinterpret_cast<POINT*>(&clientRect), 2);
+
+				bCursorIsClipped = ClipCursor(&clientRect) != FALSE;
+			}
+		}
+	}
+
+	static void UnconfineCursor()
+	{
+		if (bCursorIsClipped)
+		{
+			ClipCursor(nullptr);
+			bCursorIsClipped = false;
+		}
+	}
+
+	static WNDPROC* orgWindowProc;
+	static LRESULT CALLBACK ClipWindowProcA(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (uMsg)
+		{
+		case WM_ACTIVATE:
+			bWindowActive = bWantsCursorClip = LOWORD(wParam) != WA_INACTIVE;
+			if (wParam == FALSE)
+			{
+				UnconfineCursor();
+			}
+			break;
+
+			// If the window moves/resizes, we want it to unconfine and automatically re-confine at the next opportunity
+		case WM_ENTERSIZEMOVE:
+			bWantsCursorClip = false;
+			UnconfineCursor();
+			break;
+		case WM_EXITSIZEMOVE:
+			if (bWindowActive) bWantsCursorClip = true;
+			UnconfineCursor();
+			break;
+
+		case WM_WINDOWPOSCHANGED:
+		case WM_DISPLAYCHANGE:
+			UnconfineCursor();
+			break;
+		}
+
+		return (*orgWindowProc)(hWnd, uMsg, wParam, lParam);
+	}
+	static auto* const pClipWindowProcA = &ClipWindowProcA;
+
+	static void DoClipCursor_InGame()
+	{
+		if (bWantsCursorClip)
+		{
+			ConfineCursor();
+		}
+	}
+
+	static void DoClipCursor_InMenu()
+	{
+		UnconfineCursor();
+	}
+
+	static bool HasGameBindings()
+	{
+		return EnsureBindings(RsGlobal, bIsFrontEndActive);
+	}
+
+	static void (*orgRsCameraShowRaster)(void* camera);
+	static void RsCameraShowRaster_ProcessCursorClip(void* camera)
+	{
+		if (bIsFrontEndActive.Get())
+		{
+			DoClipCursor_InMenu();
+		}
+		else
+		{
+			DoClipCursor_InGame();
+		}
+
+		orgRsCameraShowRaster(camera);
 	}
 }
 
@@ -5898,6 +5989,9 @@ BOOL InjectDelayedPatches_10()
 						Memory::VP::Patch<float>(0x5D8903 + 6, 0.75f);
 						Memory::VP::Patch<float>(0x5D890D + 6, 0.75f);
 					}
+
+					auto [start, end] = std::minmax({ 0x5D88D1 + 6, 0x5D88DB + 6, 0x5D88E5 + 6, 0x5D88F9 + 6, 0x5D8903 + 6, 0x5D890D + 6});
+					Memory::FlushCodeChanges(start, end - start + sizeof(float));
 				} );
 	#endif
 			}
@@ -5934,6 +6028,7 @@ BOOL InjectDelayedPatches_10()
 					{
 						Memory::VP::Patch<int32_t>( 0x588905 + 1, 5 );
 					}
+					Memory::FlushCodeChanges(0x588905 + 1, sizeof(int32_t));
 
 					// Call CHud::ReInitialise
 					auto ReInitialise = (void(*)())0x588880;
@@ -6286,6 +6381,7 @@ BOOL InjectDelayedPatches_10()
 		}
 #endif
 
+		Memory::FlushCodeChanges();
 		return FALSE;
 	}
 	return TRUE;
@@ -6486,6 +6582,7 @@ BOOL InjectDelayedPatches_11()
 
 		FLAUtils::Init( moduleList );
 
+		Memory::FlushCodeChanges();
 		return FALSE;
 	}
 	return TRUE;
@@ -6696,6 +6793,7 @@ BOOL InjectDelayedPatches_Steam()
 
 		FLAUtils::Init( moduleList );
 
+		Memory::FlushCodeChanges();
 		return FALSE;
 	}
 	return TRUE;
@@ -6986,6 +7084,7 @@ BOOL InjectDelayedPatches_NewBinaries()
 		}
 		TXN_CATCH();
 
+		Memory::FlushCodeChanges();
 		return FALSE;
 	}
 	return TRUE;
@@ -7462,6 +7561,20 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 	InjectHook(0x5D9A74, DarkVehiclesFix2, HookType::Jump);
 	InjectHook(0x5D9B44, DarkVehiclesFix3, HookType::Jump);
 	InjectHook(0x5D9CB2, DarkVehiclesFix4, HookType::Jump);
+#endif
+
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
+	// Clip the cursor to the game window bounds
+	if (ClipCursorToGameWindow::HasGameBindings())
+	{
+		using namespace ClipCursorToGameWindow;
+
+		// Disable mouse re-centering
+		Nop(0x53E9F1, 5);
+
+		InterceptCall(0x53EC01, orgRsCameraShowRaster, RsCameraShowRaster_ProcessCursorClip);
+		InterceptMemDisplacement(AddressByRegion_10(0x748452 + 2), orgWindowProc, pClipWindowProcA);
+	}
 #endif
 
 #if ENABLE_FIX_SKIMMER_WINDOWS_11_24H2
@@ -8117,21 +8230,8 @@ void Patch_SA_10(HINSTANCE hInstance)
 	}
 
 
-	// TODO: Verify this fix, might be causing crashes atm and too risky to include
-#if 0
-	// Fixed CPlayerInfo assignment operator
-	InjectHook( 0x45DEF0, &CPlayerInfo::operator=, HookType::Jump );
-#endif
-
-
 	// Fixed triangle above recruitable peds' heads
 	Patch<uint8_t>( 0x60BC52 + 2, 8 ); // GANG2
-
-
-	// Credits =)
-	ReadCall( 0x5AF87A, Credits::PrintCreditText );
-	ReadCall( 0x5AF8A4, Credits::PrintCreditText_Hooked );
-	InjectHook( 0x5AF8A4, Credits::PrintSPCredits );
 
 
 	// Fixed ammo from SCM
@@ -8378,34 +8478,19 @@ void Patch_SA_10(HINSTANCE hInstance)
 
 
 	// Cancel the Drive By task of biker cops when losing the wanted level
+	// DRM-obfuscated, so exceptionally use patterns
+	try
 	{
 		using namespace BikerCopsDriveByFix;
+		using namespace hook::txn;
 
-		// ModCompat::Utils::GetFunctionAddrIfRerouted won't work here, as the decrypted function is still
-		// slightly obfuscated compared to the compact EXE deobfuscation
-		bool HoodlumPatched = false;
-		if (*reinterpret_cast<const uint8_t*>(0x41BFA0) == 0xE9)
-		{
-			// Since this function differs between EU and US Hoodlum, exceptionally use patterns
-			using namespace hook::txn;
+		uintptr_t backToCruisingIfNoWantedLevel = ModCompat::Utils::GetFunctionAddrIfRerouted(0x41BFA0);
+		auto joinCarWithRoadSystem = get_pattern({{ backToCruisingIfNoWantedLevel, backToCruisingIfNoWantedLevel + 0x100 }},
+						"56 E8 ? ? ? ? 8A 96 2D 04 00 00", 1);
 
-			uintptr_t backToCruisingIfNoWantedLevel_Obfuscated;
-			ReadCall(0x41BFA0, backToCruisingIfNoWantedLevel_Obfuscated);
-			if (ModCompat::Utils::GetModuleHandleFromAddress(backToCruisingIfNoWantedLevel_Obfuscated) == hInstance) try
-			{
-				auto joinCarWithRoadSystem = get_pattern({{ backToCruisingIfNoWantedLevel_Obfuscated, backToCruisingIfNoWantedLevel_Obfuscated + 0x100 }},
-					"56 E8 ? ? ? ? 8A 96 2D 04 00 00", 1);
-
-				VP::InterceptCall(joinCarWithRoadSystem, orgJoinCarWithRoadSystem, JoinCarWithRoadSystem_AbortDriveByTask);
-				HoodlumPatched = true;
-			}
-			TXN_CATCH();
-		}
-		if (!HoodlumPatched)
-		{
-			InterceptCall(0x41C00E, orgJoinCarWithRoadSystem, JoinCarWithRoadSystem_AbortDriveByTask);
-		}
+		InterceptCall(joinCarWithRoadSystem, orgJoinCarWithRoadSystem, JoinCarWithRoadSystem_AbortDriveByTask);
 	}
+	TXN_CATCH();
 
 
 	// Fix miscolored racing checkpoints if no other marker was drawn before them
@@ -8429,7 +8514,8 @@ void Patch_SA_10(HINSTANCE hInstance)
 		{
 			InjectHook(placeToPatch, AssignmentOp_Hoodlum, HookType::Call);
 		}
-		else
+		// Only patch compact if it's not been fixed already. No such executable exists right now, but this might change in the future
+		else if (MemEquals(placeToPatch, { 0x33, 0xD6, 0x81, 0xE2, 0x00, 0x02, 0x00, 0x00 }))
 		{
 			InjectHook(placeToPatch, AssignmentOp_Compact, HookType::Call);
 			Nop(placeToPatch + 5, 3);
@@ -8845,10 +8931,24 @@ void Patch_SA_10(HINSTANCE hInstance)
 
 
 	// Stop gang wars clearing the friendly entity blips when the gang war ends
-	Patch<int8_t>(0x446402 + 1, 0);
-	Patch<int8_t>(0x446A20 + 1, 0);
-	Patch<int8_t>(0x446B93 + 1, 0);
-	Patch<int8_t>(0x446C2C + 1, 0);
+	// DRM-obfuscated, so exceptionally use patterns
+	if (AttackWaveFriendlyBlipsFix::HasGameBindings()) try
+	{
+		using namespace AttackWaveFriendlyBlipsFix;
+		using namespace hook::txn;
+
+		uintptr_t ReleasePedsInAttackWave_start = ModCompat::Utils::GetFunctionAddrIfRerouted(0x445C30);
+
+		auto clear_blip_on_death_check = pattern({{ ReleasePedsInAttackWave_start, ReleasePedsInAttackWave_start + 0x200 }}, "8B 86 74 04 00 00 F6 C4 20").get_one();
+
+		// mov ecx, esi
+		// call ClearBlipsOnDeath_AndNotIsInPlayersGroup
+		// test al, al
+		Patch(clear_blip_on_death_check.get<void>(0), { 0x8B, 0xCE });
+		InjectHook(clear_blip_on_death_check.get<void>(2), ClearBlipsOnDeath_AndNotIsInPlayersGroup, HookType::Call);
+		Patch(clear_blip_on_death_check.get<void>(7), { 0x84, 0xC0 });
+	}
+	TXN_CATCH();
 
 
 	// Speech system fixes
@@ -9006,6 +9106,20 @@ void Patch_SA_10(HINSTANCE hInstance)
 
 		InterceptCall(0x406267, orgLoadCarGenerator, LoadCarGenerator_FixupBeagle);
 	}
+
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
+	// Clip the cursor to the game window bounds
+	if (ClipCursorToGameWindow::HasGameBindings())
+	{
+		using namespace ClipCursorToGameWindow;
+
+		// Disable mouse re-centering
+		Nop(0x53E9F1, 5);
+
+		InterceptCall(0x53EC01, orgRsCameraShowRaster, RsCameraShowRaster_ProcessCursorClip);
+		InterceptMemDisplacement(AddressByRegion_10(0x748452 + 2), orgWindowProc, pClipWindowProcA);
+	}
+#endif
 }
 
 void Patch_SA_11()
@@ -10577,18 +10691,6 @@ void Patch_SA_NewBinaries_Common(HINSTANCE hInstance)
 	TXN_CATCH();
 
 
-	// Credits =)
-	try
-	{
-		auto renderCredits = pattern( "83 C4 18 E8 ? ? ? ? 80 3D" ).get_one();
-
-		ReadCall( renderCredits.get<void>( -58 ), Credits::PrintCreditText );
-		ReadCall( renderCredits.get<void>( -5 ), Credits::PrintCreditText_Hooked );
-		InjectHook( renderCredits.get<void>( -5 ), Credits::PrintSPCredits );
-	}
-	TXN_CATCH();
-
-
 	// Fixed ammo from SCM
 	try
 	{
@@ -11496,17 +11598,19 @@ void Patch_SA_NewBinaries_Common(HINSTANCE hInstance)
 
 
 	// Stop gang wars clearing the friendly entity blips when the gang war ends
-	try
+	if (AttackWaveFriendlyBlipsFix::HasGameBindings()) try
 	{
-		auto do_stuff_when_player_victorious = get_pattern("6A 01 E8 ? ? ? ? 83 C4 08 E8 ? ? ? ? E8 ? ? ? ? 6A 01 6A 01 68", 1);
-		auto update1 = get_pattern("53 6A 01 D9 1D", 1 + 1);
-		auto update2 = get_pattern("53 6A 01 E8 ? ? ? ? 83 C4 30", 1 + 1);
-		auto update3 = get_pattern("53 6A 01 E8 ? ? ? ? 8B 0D", 1 + 1);
+		using namespace AttackWaveFriendlyBlipsFix;
 
-		Patch<int8_t>(do_stuff_when_player_victorious, 0);
-		Patch<int8_t>(update1, 0);
-		Patch<int8_t>(update2, 0);
-		Patch<int8_t>(update3, 0);
+		auto clear_blip_on_death_check = pattern("F7 86 74 04 00 00 00 20 00 00 74 3D").get_one();
+
+		// mov ecx, esi
+		// call ClearBlipsOnDeath_AndNotIsInPlayersGroup
+		// test al, al
+		// nop
+		Patch(clear_blip_on_death_check.get<void>(0), { 0x8B, 0xCE });
+		InjectHook(clear_blip_on_death_check.get<void>(2), ClearBlipsOnDeath_AndNotIsInPlayersGroup, HookType::Call);
+		Patch(clear_blip_on_death_check.get<void>(7), { 0x84, 0xC0, 0x90 });
 	}
 	TXN_CATCH();
 
@@ -11789,6 +11893,40 @@ void Patch_SA_NewBinaries_Common(HINSTANCE hInstance)
 		InterceptCall(load_car_generator, orgLoadCarGenerator, LoadCarGenerator_FixupBeagle);
 	}
 	TXN_CATCH();
+
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
+	// Clip the cursor to the game window bounds
+	if (ClipCursorToGameWindow::HasGameBindings()) try
+	{
+		using namespace ClipCursorToGameWindow;
+
+		auto rs_camera_show_raster = get_pattern("8B 0D ? ? ? ? 51 E8 ? ? ? ? 83 C4 08 8B E5 5D C3", 7);
+		auto def_window_proc = [] {
+			try {
+				// Steam
+				return get_pattern("50 FF 15 ? ? ? ? 5F 5E 5B", 3);
+			} catch (const hook::txn_exception&) {
+				// RGL
+				return get_pattern("52 FF 15 ? ? ? ? 5F 5E 5B 8B E5", 3);
+			}
+		}();
+
+		// In a bad attempt to fix the mouse issues, the RGL executable cut the DirectInput mouse in favour of using WM_MOUSEMOVE for the camera movements.
+		// This means that the camera stops spinning when the cursor hits our clipping area, and so we need to keep re-centering
+		// as-is so it doesn't break terribly. With this pattern, we can check if this code is present (RGL) or not (newsteam r2)
+		// and act accordingly.
+		if (hook::pattern("8B 45 14 0F BF C8 C1 E8 10 98 5F 5E").count_hint(1).size() != 1)
+		{
+			// newsteam r2, not RGL
+			auto rs_mouse_set_pos = get_pattern("D9 5D FC E8 ? ? ? ? 83 C4 04 E8", 3);
+			Nop(rs_mouse_set_pos, 5);
+		}
+
+		InterceptCall(rs_camera_show_raster, orgRsCameraShowRaster, RsCameraShowRaster_ProcessCursorClip);
+		InterceptMemDisplacement(def_window_proc, orgWindowProc, pClipWindowProcA);
+	}
+	TXN_CATCH();
+#endif
 }
 #endif
 
@@ -11821,6 +11959,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 			Patch_SA_NewBinaries_Common(hInstance);
 		}
 #endif
+		Memory::FlushCodeChanges();
 	}
 	else if ( fdwReason == DLL_PROCESS_DETACH )
 	{

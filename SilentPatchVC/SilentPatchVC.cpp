@@ -52,6 +52,20 @@ namespace ModCompat
 	}
 }
 
+struct PsGlobalType
+{
+	HWND	window;
+	DWORD	instance;
+	DWORD	fullscreen;
+	DWORD	lastMousePos_X;
+	DWORD	lastMousePos_Y;
+	DWORD	unk;
+	DWORD	diInterface;
+	DWORD	diMouse;
+	void*	diDevice1;
+	void*	diDevice2;
+};
+
 struct RsGlobalType
 {
 	const char*		AppName;
@@ -60,7 +74,7 @@ struct RsGlobalType
 	signed int		MaximumHeight;
 	unsigned int	frameLimit;
 	BOOL			quit;
-	void*			ps;
+	PsGlobalType*	ps;
 	void*			keyboard;
 	void*			mouse;
 	void*			pad;
@@ -75,6 +89,9 @@ static ExternalFunc<void* (const char* modelName, int* modelID)> GetModelInfo("5
 // This is actually CBaseModelInfo, but we currently don't have it defined
 ExternalRef<CVehicleModelInfo*[]> ms_modelInfoPtrs("8B 15 ? ? ? ? 8D 04 24", 2);
 ExternalValue<int32_t> numModelInfos("81 FD ? ? ? ? 7C B7", 2);
+
+// Technically part of CMenuManager, but we only need this boolean
+static ExternalRef<bool> bIsFrontEndActive("80 3D ? ? ? ? 00 0F 85 ? ? ? ? B9 ? ? ? ? E8", 2);
 
 namespace UIScales
 {
@@ -284,153 +301,138 @@ namespace UIScales
 	};
 }
 
-static bool bGameInFocus = true;
 
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-static bool bMouseClipActive = false;
-void ReleaseMouseClip()
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
+// ============= Clip the cursor to the game window bounds =============
+namespace ClipCursorToGameWindow
 {
-	if ( bMouseClipActive )
+	static bool bWindowActive = false, bWantsCursorClip = false, bCursorIsClipped = false;
+	static RECT CursorClipRect = {};
+
+	static void ConfineCursor()
 	{
-		ClipCursor(nullptr);
-		bMouseClipActive = false;
+		HWND window = RsGlobal.Get().ps->window;
+		if (window != nullptr)
+		{
+			RECT clientRect;
+			GetClientRect(window, &clientRect);
+
+			// Make the coordinates inclusive, so grabbing the right/bottom side of the screen is not possible
+			// (happens on high DPI displays otherwise)
+			clientRect.right -= 1;
+			clientRect.bottom -= 1;
+
+			MapWindowPoints(window, nullptr, reinterpret_cast<POINT*>(&clientRect), 2);
+
+			if (!bCursorIsClipped || !EqualRect(&clientRect, &CursorClipRect))
+			{
+				bCursorIsClipped = ClipCursor(&clientRect) != FALSE;
+				if (bCursorIsClipped)
+				{
+					CursorClipRect = clientRect;
+				}
+			}
+		}
+	}
+
+	static void UnconfineCursor()
+	{
+		if (bCursorIsClipped)
+		{
+			ClipCursor(nullptr);
+			bCursorIsClipped = false;
+			CursorClipRect = {};
+		}
+	}
+
+	static WNDPROC* orgWindowProc;
+	static LRESULT CALLBACK ClipWindowProcA(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (uMsg)
+		{
+		case WM_ACTIVATE:
+			bWindowActive = bWantsCursorClip = LOWORD(wParam) != WA_INACTIVE;
+			if (wParam == FALSE)
+			{
+				UnconfineCursor();
+			}
+			break;
+
+			// If the window moves/resizes, we want it to unconfine and automatically re-confine at the next opportunity
+		case WM_ENTERSIZEMOVE:
+			bWantsCursorClip = false;
+			UnconfineCursor();
+			break;
+		case WM_EXITSIZEMOVE:
+			if (bWindowActive) bWantsCursorClip = true;
+			UnconfineCursor();
+			break;
+
+		case WM_WINDOWPOSCHANGED:
+		case WM_DISPLAYCHANGE:
+			UnconfineCursor();
+			break;
+		}
+
+		return (*orgWindowProc)(hWnd, uMsg, wParam, lParam);
+	}
+	static auto* const pClipWindowProcA = &ClipWindowProcA;
+
+	static void DoClipCursor_InGame()
+	{
+		if (bWantsCursorClip)
+		{
+			ConfineCursor();
+		}
+	}
+
+	static void DoClipCursor_InMenu()
+	{
+		UnconfineCursor();
+	}
+
+	static bool HasGameBindings()
+	{
+		return EnsureBindings(RsGlobal, bIsFrontEndActive);
+	}
+
+	static void (*orgRsCameraShowRaster)(void* camera);
+	static void RsCameraShowRaster_ProcessCursorClip(void* camera)
+	{
+		if (bIsFrontEndActive.Get())
+		{
+			DoClipCursor_InMenu();
+		}
+		else
+		{
+			DoClipCursor_InGame();
+		}
+
+		orgRsCameraShowRaster(camera);
+	}
+
+	static void (*orgConstructRenderList_JP)();
+	static void ConstructRenderList_ProcessCursorClip_JP()
+	{
+		PsGlobalType* ps = RsGlobal.Get().ps;
+		if (ps != nullptr && ps->window != nullptr)
+		{
+			bWindowActive = bWantsCursorClip = GetActiveWindow() == ps->window;
+		}
+
+		if (bIsFrontEndActive.Get())
+		{
+			DoClipCursor_InMenu();
+		}
+		else
+		{
+			DoClipCursor_InGame();
+		}
+
+		orgConstructRenderList_JP();
 	}
 }
 #endif
-
-static LRESULT (CALLBACK **OldWndProc)(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK CustomWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	switch ( uMsg )
-	{
-	case WM_KILLFOCUS:
-		bGameInFocus = false;
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-		ReleaseMouseClip();
-#endif
-		break;
-	case WM_SETFOCUS:
-		bGameInFocus = true;
-		break;
-	}
-
-	return (*OldWndProc)(hwnd, uMsg, wParam, lParam);
-}
-static auto* const pCustomWndProc = CustomWndProc;
-
-static void (* const RsMouseSetPos)(RwV2d*) = AddressByVersion<void(*)(RwV2d*)>(0x6030C0, 0x6030A0, 0x602CE0, 0x602E60);
-static void (*orgConstructRenderList)();
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-HWND GetGameWindow()
-{
-	if ( !EnsureBindings(RsGlobal) || RsGlobal.Get().ps == nullptr )
-	{
-		return nullptr;
-	}
-
-	return *static_cast<HWND*>(RsGlobal.Get().ps);
-}
-#endif
-
-bool IsGameWindowForeground()
-{
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-	HWND window = GetGameWindow();
-#else
-	if ( !EnsureBindings(RsGlobal) || RsGlobal.Get().ps == nullptr )
-	{
-		return false;
-	}
-
-	HWND window = *static_cast<HWND*>(RsGlobal.Get().ps);
-#endif
-	if ( window == nullptr )
-	{
-		return false;
-	}
-
-	HWND foregroundWindow = GetForegroundWindow();
-	return foregroundWindow == window || GetAncestor(foregroundWindow, GA_ROOT) == window;
-}
-
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-void ResetMousePos_ClipCursor()
-{
-	HWND window = GetGameWindow();
-	if ( window == nullptr || !IsGameWindowForeground() )
-	{
-		ReleaseMouseClip();
-		return;
-	}
-
-	RECT clientRect = {};
-	if ( GetClientRect(window, &clientRect) == FALSE || clientRect.right <= clientRect.left || clientRect.bottom <= clientRect.top )
-	{
-		ReleaseMouseClip();
-		return;
-	}
-
-	POINT upperLeft = { clientRect.left, clientRect.top };
-	POINT lowerRight = { clientRect.right, clientRect.bottom };
-	if ( ClientToScreen(window, &upperLeft) == FALSE || ClientToScreen(window, &lowerRight) == FALSE )
-	{
-		ReleaseMouseClip();
-		return;
-	}
-
-	RECT clipRect = { upperLeft.x, upperLeft.y, lowerRight.x, lowerRight.y };
-	if ( ClipCursor(&clipRect) != FALSE )
-	{
-		bMouseClipActive = true;
-	}
-	else
-	{
-		ReleaseMouseClip();
-	}
-}
-#endif
-
-void ResetMousePos_Recenter()
-{
-	if ( bGameInFocus )
-	{
-		RwV2d	vecPos = { RsGlobal.Get().MaximumWidth * 0.5f, RsGlobal.Get().MaximumHeight * 0.5f };
-		RsMouseSetPos(&vecPos);
-	}
-}
-
-void ResetMousePos()
-{
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-	ResetMousePos_ClipCursor();
-#else
-	ResetMousePos_Recenter();
-#endif
-	orgConstructRenderList();
-}
-
-void ResetMousePos_Recenter_JP()
-{
-	if ( IsGameWindowForeground() )
-	{
-		ResetMousePos_Recenter();
-	}
-}
-
-__declspec(naked) void ResetMousePos_JP()
-{
-	_asm
-	{
-		pushad
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-		call	ResetMousePos_ClipCursor
-#else
-		call	ResetMousePos_Recenter_JP
-#endif
-		popad
-		jmp		dword ptr [orgConstructRenderList]
-	}
-}
 
 namespace PrintStringShadows
 {
@@ -1306,54 +1308,6 @@ HOOK_EACH_INIT(GiveWeapon, orgGiveWeapon, GiveWeapon_SP);
 }
 
 
-// ============= Credits! =============
-namespace Credits
-{
-	static void (*PrintCreditText)(float scaleX, float scaleY, const wchar_t* text, unsigned int& pos, float timeOffset);
-	static void (*PrintCreditText_Hooked)(float scaleX, float scaleY, const wchar_t* text, unsigned int& pos, float timeOffset);
-
-	static void PrintCreditSpace( float scale, unsigned int& pos )
-	{
-		pos += static_cast<unsigned int>( scale * 25.0f );
-	}
-
-	constexpr wchar_t xvChar(const wchar_t ch)
-	{
-		constexpr uint8_t xv = SILENTPATCH_REVISION_ID;
-		return ch ^ xv;
-	}
-
-	constexpr wchar_t operator "" _xv(const char ch)
-	{
-		return xvChar(ch);
-	}
-
-	static void PrintSPCredits( float scaleX, float scaleY, const wchar_t* text, unsigned int& pos, float timeOffset )
-	{
-		// Original text we intercepted
-		PrintCreditText_Hooked( scaleX, scaleY, text, pos, timeOffset );
-		PrintCreditSpace( 1.5f, pos );
-
-		{
-			wchar_t spText[] = { 'A'_xv, 'N'_xv, 'D'_xv, '\0'_xv, '\0'_xv };
-
-			for ( auto& ch : spText ) ch = xvChar(ch);
-			PrintCreditText( 1.1f, 0.8f, spText, pos, timeOffset );
-		}
-
-		PrintCreditSpace( 1.5f, pos );
-
-		{
-			wchar_t spText[] = { 'A'_xv, 'D'_xv, 'R'_xv, 'I'_xv, 'A'_xv, 'N'_xv, ' '_xv, '\''_xv, 'S'_xv, 'I'_xv, 'L'_xv, 'E'_xv, 'N'_xv, 'T'_xv, '\''_xv, ' '_xv,
-				'Z'_xv, 'D'_xv, 'A'_xv, 'N'_xv, 'O'_xv, 'W'_xv, 'I'_xv, 'C'_xv, 'Z'_xv, '\0'_xv, '\0'_xv };
-
-			for ( auto& ch : spText ) ch = xvChar(ch);
-			PrintCreditText( 1.1f, 1.1f, spText, pos, timeOffset );
-		}
-	}
-}
-
-
 // ============= Keyboard latency input fix =============
 namespace KeyboardInputFix
 {
@@ -2099,6 +2053,62 @@ namespace BilinearScriptSprites
 }
 
 
+// ============= Animate Skimmer's rear elevator properly =============
+namespace SkimmerRearElevator
+{
+	static bool HasGameBindings()
+	{
+		return EnsureBindings(CTimer::ms_fTimeStep);
+	}
+
+	// Read from CVehicle::FlyingControl for GInput compatibility
+	static int16_t (__thiscall* GetCarGunUpDown)(class CPad* pad);
+
+	static float fRearElevatorValue = 0.0f;
+	static void ProcessRearElevator(int16_t input)
+	{
+		// 0.2f at 30FPS
+		const float delta = std::min(1.0f, CTimer::ms_fTimeStep.Get() * 0.12f);
+		fRearElevatorValue += (input - fRearElevatorValue) * delta;
+		fRearElevatorValue = std::clamp(fRearElevatorValue, -128.0f, 128.0f);
+	}
+
+	static bool bElevatorProcessedThisFrame = false;
+
+	static int16_t (__thiscall* orgGetSteeringUpDown_Left)(class CPad* pad);
+	static int16_t __fastcall GetSteeringUpDown_CarGunUpDown_Left(class CPad* pad)
+	{
+		int16_t input = -GetCarGunUpDown(pad);
+		if (std::abs(input) <= 1)
+		{
+			input = orgGetSteeringUpDown_Left(pad);
+		}
+
+		ProcessRearElevator(input);
+		bElevatorProcessedThisFrame = true;
+		return static_cast<int16_t>(fRearElevatorValue);
+
+	}
+
+	static int16_t (__thiscall* orgGetSteeringUpDown_Right)(class CPad* pad);
+	static int16_t __fastcall GetSteeringUpDown_CarGunUpDown_Right(class CPad* pad)
+	{
+		if (!bElevatorProcessedThisFrame)
+		{
+			int16_t input = -GetCarGunUpDown(pad);
+			if (std::abs(input) <= 1)
+			{
+				input = orgGetSteeringUpDown_Right(pad);
+			}
+
+			ProcessRearElevator(input);
+		}
+		bElevatorProcessedThisFrame = false;
+		return static_cast<int16_t>(fRearElevatorValue);
+	}
+}
+
+
 namespace ModelIndicesReadyHook
 {
 	static void (*orgInitialiseObjectData)(const char*);
@@ -2762,6 +2772,9 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 					}
 				}
 
+				const auto [start, end] = std::minmax_element(hudReinitialiseVariables.begin(), hudReinitialiseVariables.end());
+				Memory::FlushCodeChanges(*start, reinterpret_cast<intptr_t>(*end) - reinterpret_cast<intptr_t>(*start) + sizeof(uint32_t));
+
 				// Call CHud::ReInitialise
 				HUDReInitialise();
 			});
@@ -2973,6 +2986,7 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 			static bool bIconEnabled = INIoption != 0;
 			DebugMenuAddVar("SilentPatch", "Show property blips", &bIconEnabled, [] {
 				Memory::VP::Patch<int8_t>(property_blip_ptr, bIconEnabled ? -1 : 0x19);
+				Memory::FlushCodeChanges(property_blip_ptr, sizeof(int8_t));
 			});
 		}
 	}
@@ -3096,6 +3110,29 @@ void InjectDelayedPatches_VC_Common( bool bHasDebugMenu, const wchar_t* wcModule
 	TXN_CATCH();
 #endif
 
+#if ENABLE_FIX_SPEECH_DELAY_TIMER
+	// Speech delay fix
+	if (const int speech_delay = GetPrivateProfileIntW(L"SilentPatch", L"SpeechDelayTimer", -1, wcModulePath); speech_delay != -1) try
+	{
+		static auto speech_delay_pattern = get_pattern("2B 86 8C 04 00 00 3D", 7); // targeting cmp eax, 1770h (6000ms)
+
+		static constexpr int32_t MIN_SPEECH_DELAY = 0, MAX_SPEECH_DELAY = 6000;
+		static int32_t current_speech_delay = std::clamp(speech_delay, MIN_SPEECH_DELAY, MAX_SPEECH_DELAY);
+
+		// Patch 6s delay between any ped speech samples
+		Patch<int32_t>(speech_delay_pattern, current_speech_delay);
+
+		if (bHasDebugMenu)
+		{
+			DebugMenuAddVar("SilentPatch", "Speech delay timer", &current_speech_delay, [] {
+				Memory::VP::Patch<int32_t>(speech_delay_pattern, current_speech_delay);
+				Memory::FlushCodeChanges(speech_delay_pattern, sizeof(int32_t));
+			}, 500, MIN_SPEECH_DELAY, MAX_SPEECH_DELAY, nullptr);
+		}
+	}
+	TXN_CATCH();
+#endif
+
 #if ENABLE_SUPPORT_FLA_UTILS
 	FLAUtils::Init(moduleList);
 #endif
@@ -3125,6 +3162,7 @@ void InjectDelayedPatches()
 	InjectDelayedPatches_VC_Common( hasDebugMenu, wcModulePath );
 
 	Common::Patches::III_VC_DelayedCommon( hasDebugMenu, wcModulePath );
+	Memory::FlushCodeChanges();
 }
 
 void Patch_VC_10(uint32_t width, uint32_t height)
@@ -3157,19 +3195,6 @@ void Patch_VC_10(uint32_t width, uint32_t height)
 	ReadCall( 0x6004A2, RsEventHandler );
 	InjectHook(0x6004A2, NewFrameRender);
 	InjectHook(0x600449, GetTimeSinceLastFrame);
-#endif
-
-
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
-	// RsMouseSetPos call (SA style fix)
-	if (EnsureBindings(RsGlobal))
-	{
-		ReadCall( 0x4A5E45, orgConstructRenderList );
-		InjectHook(0x4A5E45, ResetMousePos);
-
-		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x601727);
-		Patch(0x601727, &pCustomWndProc);
-	}
 #endif
 
 #if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
@@ -3262,17 +3287,6 @@ void Patch_VC_11(uint32_t width, uint32_t height)
 	InjectHook(0x600469, GetTimeSinceLastFrame);
 #endif
 
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
-	// RsMouseSetPos call (SA style fix)
-	if (EnsureBindings(RsGlobal))
-	{
-		ReadCall( 0x4A5E65, orgConstructRenderList );
-		InjectHook(0x4A5E65, ResetMousePos);
-
-		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x601757);
-		Patch(0x601757, &pCustomWndProc);
-	}
-#endif
 
 #if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
 	// Y axis sensitivity fix
@@ -3364,17 +3378,6 @@ void Patch_VC_Steam(uint32_t width, uint32_t height)
 	InjectHook(0x6000A9, GetTimeSinceLastFrame);
 #endif
 
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
-	// RsMouseSetPos call (SA style fix)
-	if (EnsureBindings(RsGlobal))
-	{
-		ReadCall( 0x4A5D15, orgConstructRenderList );
-		InjectHook(0x4A5D15, ResetMousePos);
-
-		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x601397);
-		Patch(0x601397, &pCustomWndProc);
-	}
-#endif
 
 #if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
 	// Y axis sensitivity fix
@@ -3445,12 +3448,15 @@ void Patch_VC_JP(uint32_t width, uint32_t height)
 #endif
 
 #if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
-	// RsMouseSetPos call (SA style fix)
-	if (EnsureBindings(RsGlobal))
+	// JP is not supported upstream, so hook the known render-list call directly.
+	if (ClipCursorToGameWindow::HasGameBindings()) try
 	{
-		ReadCall( 0x4A5765, orgConstructRenderList );
-		InjectHook(0x4A5765, ResetMousePos_JP);
+		using namespace ClipCursorToGameWindow;
+
+		ReadCall(0x4A5765, orgConstructRenderList_JP);
+		InjectHook(0x4A5765, ConstructRenderList_ProcessCursorClip_JP);
 	}
+	TXN_CATCH();
 #endif
 
 #if ENABLE_FIX_MOUSE_VERTICAL_SENSITIVITY
@@ -4019,12 +4025,8 @@ void Patch_VC_Common()
 	// Based off Sergeanur's fix
 	try
 	{
-		// Remove the artificial 6s delay between any ped speech samples
-		auto delay_check = get_pattern("80 BE ? ? ? ? ? 0F 85 ? ? ? ? B9", 7);
 		auto comment_delay_id1 = get_pattern("0F B7 C2 DD D8 C1 E0 04");
 		auto comment_delay_id2 = pattern("0F B7 95 DA 05 00 00 D9 6C 24 04").get_one();
-
-		Nop(delay_check, 6);
 
 		// movzx eax, dx -> movzx eax, bx
 		Patch(comment_delay_id1, { 0x0F, 0xB7, 0xC3 });
@@ -4426,6 +4428,50 @@ void Patch_VC_Common()
 	}
 	TXN_CATCH();
 #endif
+
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
+
+	// Clip the cursor to the game window bounds
+	if (ClipCursorToGameWindow::HasGameBindings()) try
+	{
+		using namespace ClipCursorToGameWindow;
+
+		auto rs_camera_show_raster = get_pattern("50 E8 ? ? ? ? 80 3D ? ? ? ? 00 59 74 05 E8", 1);
+		auto def_window_proc = get_pattern("FF 15 ? ? ? ? 83 C4 70", 2);
+
+		InterceptCall(rs_camera_show_raster, orgRsCameraShowRaster, RsCameraShowRaster_ProcessCursorClip);
+		InterceptMemDisplacement(def_window_proc, orgWindowProc, pClipWindowProcA);
+
+		// Establish the initial state if we loaded late
+		PsGlobalType* ps = RsGlobal.Get().ps;
+		if (ps != nullptr && ps->window != nullptr)
+		{
+			bWindowActive = bWantsCursorClip = GetActiveWindow() == ps->window;
+		}
+	}
+	TXN_CATCH();
+#endif
+
+
+#if ENABLE_FIX_SKIMMER_REAR_ELEVATOR
+	// Animate Skimmer's rear elevator properly
+	if (SkimmerRearElevator::HasGameBindings()) try
+	{
+		using namespace SkimmerRearElevator;
+
+		auto get_car_gun_up_down_flying_control = get_pattern("89 C1 E8 ? ? ? ? 0F BF C0 F7 D8 89 84 24 ? ? ? ? DB 84 24 ? ? ? ? D8 0D ? ? ? ? D9 5C 24 14 D9 EE", 2);
+
+		// This is annoying - CPad::GetSteeringUpDown() is called separately for m_aBoatNodes[BOAT_REARFLAP_LEFT] and m_aBoatNodes[BOAT_REARFLAP_RIGHT],
+		// but we want both to have the same smooth steering value, AND support one without the other, in case mods only include one.
+		// We use a bit of extra state to track if BOAT_REARFLAP_LEFT was animated or not.
+		auto get_steering_up_down_flaps = pattern("89 C1 E8 ? ? ? ? 0F BF C0 F7 D8 89 84 24 ? ? ? ? 50").count(2); // Left, then right
+
+		ReadCall(get_car_gun_up_down_flying_control, GetCarGunUpDown);
+		InterceptCall(get_steering_up_down_flaps.get(0).get<void>(2), orgGetSteeringUpDown_Left, GetSteeringUpDown_CarGunUpDown_Left);
+		InterceptCall(get_steering_up_down_flaps.get(1).get<void>(2), orgGetSteeringUpDown_Right, GetSteeringUpDown_CarGunUpDown_Right);
+	}
+	TXN_CATCH();
+#endif
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
@@ -4457,12 +4503,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 #if ENABLE_FIX_DEP_STARTUP_CRASH
 		Common::Patches::FixRwcseg_Patterns();
 #endif
+		Memory::FlushCodeChanges();
 	}
 	else if ( fdwReason == DLL_PROCESS_DETACH )
 	{
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-		ReleaseMouseClip();
-#endif
 		CrashLogger::Uninstall();
 	}
 	return TRUE;

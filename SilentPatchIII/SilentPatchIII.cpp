@@ -98,6 +98,9 @@ static const void*		HeadlightsFix_JumpBack;
 
 static ExternalRef<RsGlobalType> RsGlobal;
 
+// Technically part of CMenuManager, but we only need this boolean
+static ExternalRef<bool> bIsFrontEndActive("80 3D ? ? ? ? 00 74 ? 80 3D ? ? ? ? 01 0F 85", 2);
+
 namespace UIScales
 {
 	static float** Width_Internal(std::string_view pattern_string, ptrdiff_t offset = 0) try
@@ -399,119 +402,112 @@ namespace PurpleNinesGlitchFix
 	}
 }
 
-static bool bGameInFocus = true;
 
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-static bool bMouseClipActive = false;
-void ReleaseMouseClip()
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
+// ============= Clip the cursor to the game window bounds =============
+namespace ClipCursorToGameWindow
 {
-	if ( bMouseClipActive )
+	static bool bWindowActive = false, bWantsCursorClip = false, bCursorIsClipped = false;
+
+	static void ConfineCursor()
 	{
-		ClipCursor(nullptr);
-		bMouseClipActive = false;
+		if (!bCursorIsClipped)
+		{
+			HWND window = RsGlobal.Get().ps->window;
+			if (window != nullptr)
+			{
+				RECT clientRect;
+				GetClientRect(window, &clientRect);
+
+				// Make the coordinates inclusive, so grabbing the right/bottom side of the screen is not possible
+				// (happens on high DPI displays otherwise)
+				clientRect.right -= 1;
+				clientRect.bottom -= 1;
+
+				MapWindowPoints(window, nullptr, reinterpret_cast<POINT*>(&clientRect), 2);
+
+				bCursorIsClipped = ClipCursor(&clientRect) != FALSE;
+			}
+		}
+	}
+
+	static void UnconfineCursor()
+	{
+		if (bCursorIsClipped)
+		{
+			ClipCursor(nullptr);
+			bCursorIsClipped = false;
+		}
+	}
+
+	static WNDPROC* orgWindowProc;
+	static LRESULT CALLBACK ClipWindowProcA(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		switch (uMsg)
+		{
+		case WM_ACTIVATE:
+			bWindowActive = bWantsCursorClip = LOWORD(wParam) != WA_INACTIVE;
+			if (wParam == FALSE)
+			{
+				UnconfineCursor();
+			}
+			break;
+
+		// If the window moves/resizes, we want it to unconfine and automatically re-confine at the next opportunity
+		case WM_ENTERSIZEMOVE:
+			bWantsCursorClip = false;
+			UnconfineCursor();
+			break;
+		case WM_EXITSIZEMOVE:
+			if (bWindowActive) bWantsCursorClip = true;
+			UnconfineCursor();
+			break;
+
+		case WM_WINDOWPOSCHANGED:
+		case WM_DISPLAYCHANGE:
+			UnconfineCursor();
+			break;
+		}
+
+		return (*orgWindowProc)(hWnd, uMsg, wParam, lParam);
+	}
+	static auto* const pClipWindowProcA = &ClipWindowProcA;
+
+	static void DoClipCursor_InGame()
+	{
+		if (bWantsCursorClip)
+		{
+			ConfineCursor();
+		}
+	}
+
+	static void DoClipCursor_InMenu()
+	{
+		UnconfineCursor();
+	}
+
+	static bool HasGameBindings()
+	{
+		return EnsureBindings(RsGlobal, bIsFrontEndActive);
+	}
+
+	static void (*orgDoRWStuffEndOfFrame)();
+	static void DoRWStuffEndOfFrame_ProcessCursorClip()
+	{
+		if (bIsFrontEndActive.Get())
+		{
+			DoClipCursor_InMenu();
+		}
+		else
+		{
+			DoClipCursor_InGame();
+		}
+
+		orgDoRWStuffEndOfFrame();
 	}
 }
 #endif
 
-static LRESULT (CALLBACK **OldWndProc)(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK CustomWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	switch ( uMsg )
-	{
-	case WM_KILLFOCUS:
-		bGameInFocus = false;
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-		ReleaseMouseClip();
-#endif
-		break;
-	case WM_SETFOCUS:
-		bGameInFocus = true;
-		break;
-	}
-
-	return (*OldWndProc)(hwnd, uMsg, wParam, lParam);
-}
-static auto* const pCustomWndProc = CustomWndProc;
-
-static void (* const RsMouseSetPos)(RwV2d*) = AddressByVersion<void(*)(RwV2d*)>(0x580D20, 0x581070, 0x580F70);
-static void (*orgConstructRenderList)();
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-HWND GetGameWindow()
-{
-	if ( !EnsureBindings(RsGlobal) || RsGlobal.Get().ps == nullptr )
-	{
-		return nullptr;
-	}
-
-	return *reinterpret_cast<HWND*>(RsGlobal.Get().ps);
-}
-
-bool IsGameWindowForeground()
-{
-	HWND window = GetGameWindow();
-	if ( window == nullptr )
-	{
-		return false;
-	}
-
-	HWND foregroundWindow = GetForegroundWindow();
-	return foregroundWindow == window || GetAncestor(foregroundWindow, GA_ROOT) == window;
-}
-
-void ResetMousePos_ClipCursor()
-{
-	HWND window = GetGameWindow();
-	if ( window == nullptr || !IsGameWindowForeground() )
-	{
-		ReleaseMouseClip();
-		return;
-	}
-
-	RECT clientRect = {};
-	if ( GetClientRect(window, &clientRect) == FALSE || clientRect.right <= clientRect.left || clientRect.bottom <= clientRect.top )
-	{
-		ReleaseMouseClip();
-		return;
-	}
-
-	POINT upperLeft = { clientRect.left, clientRect.top };
-	POINT lowerRight = { clientRect.right, clientRect.bottom };
-	if ( ClientToScreen(window, &upperLeft) == FALSE || ClientToScreen(window, &lowerRight) == FALSE )
-	{
-		ReleaseMouseClip();
-		return;
-	}
-
-	RECT clipRect = { upperLeft.x, upperLeft.y, lowerRight.x, lowerRight.y };
-	if ( ClipCursor(&clipRect) != FALSE )
-	{
-		bMouseClipActive = true;
-	}
-	else
-	{
-		ReleaseMouseClip();
-	}
-}
-#endif
-
-void ResetMousePos_Recenter()
-{
-	if ( bGameInFocus )
-	{
-		RwV2d	vecPos = { RsGlobal.Get().MaximumWidth * 0.5f, RsGlobal.Get().MaximumHeight * 0.5f };
-		RsMouseSetPos(&vecPos);
-	}
-}
-
-void ResetMousePos()
-{
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-	ResetMousePos_ClipCursor();
-#else
-	ResetMousePos_Recenter();
-#endif
-	orgConstructRenderList();
-}
 
 // ============= Fix M16 first person aiming not adding to the instant hits fired stat =============
 namespace M16StatsFix
@@ -786,53 +782,6 @@ HOOK_EACH_INIT(GiveWeapon, orgGiveWeapon, GiveWeapon_SP);
 
 }
 
-
-// ============= Credits! =============
-namespace Credits
-{
-	static void (*PrintCreditText)(float scaleX, float scaleY, const wchar_t* text, unsigned int& pos, float timeOffset);
-	static void (*PrintCreditText_Hooked)(float scaleX, float scaleY, const wchar_t* text, unsigned int& pos, float timeOffset);
-
-	static void PrintCreditSpace( float scale, unsigned int& pos )
-	{
-		pos += static_cast<unsigned int>( scale * 25.0f );
-	}
-
-	constexpr wchar_t xvChar(const wchar_t ch)
-	{
-		constexpr uint8_t xv = SILENTPATCH_REVISION_ID;
-		return ch ^ xv;
-	}
-
-	constexpr wchar_t operator "" _xv(const char ch)
-	{
-		return xvChar(ch);
-	}
-
-	static void PrintSPCredits( float scaleX, float scaleY, const wchar_t* text, unsigned int& pos, float timeOffset )
-	{
-		// Original text we intercepted
-		PrintCreditText_Hooked( scaleX, scaleY, text, pos, timeOffset );
-		PrintCreditSpace( 2.0f, pos );
-
-		{
-			wchar_t spText[] = { 'A'_xv, 'N'_xv, 'D'_xv, '\0'_xv, '\0'_xv };
-
-			for ( auto& ch : spText ) ch = xvChar(ch);
-			PrintCreditText( 1.7f, 1.0f, spText, pos, timeOffset );
-		}
-
-		PrintCreditSpace( 2.0f, pos );
-
-		{
-			wchar_t spText[] = { 'A'_xv, 'D'_xv, 'R'_xv, 'I'_xv, 'A'_xv, 'N'_xv, ' '_xv, '\''_xv, 'S'_xv, 'I'_xv, 'L'_xv, 'E'_xv, 'N'_xv, 'T'_xv, '\''_xv, ' '_xv,
-				'Z'_xv, 'D'_xv, 'A'_xv, 'N'_xv, 'O'_xv, 'W'_xv, 'I'_xv, 'C'_xv, 'Z'_xv, '\0'_xv, '\0'_xv };
-
-			for ( auto& ch : spText ) ch = xvChar(ch);
-			PrintCreditText( 1.7f, 1.7f, spText, pos, timeOffset );
-		}
-	}
-}
 
 // ============= Keyboard latency input fix =============
 namespace KeyboardInputFix
@@ -1313,6 +1262,41 @@ namespace RadardiscFixes
 	HOOK_EACH_INIT(CalculateRadarXPos, orgRadarXPos, RadarXPos_Recalculated);
 	HOOK_EACH_INIT(CalculateRadarYPos, orgRadarYPos, RadarYPos_Recalculated);
 }
+
+
+// ============= Console bottom UI placements=============
+namespace ConsoleUIPlacements
+{
+	template<std::size_t Index>
+	static std::pair<const float*, float> YPosData;
+
+	template<std::size_t Index>
+	static float YPos_Recalculated;
+
+	static bool bUseConsolePlacements = false;
+
+	template<std::size_t... I>
+	static void UpdateUIPlacementsInternal(std::index_sequence<I...>)
+	{
+		if (bUseConsolePlacements)
+		{
+			((YPos_Recalculated<I> = YPosData<I>.second), ...);
+		}
+		else
+		{
+			((YPos_Recalculated<I> = *YPosData<I>.first), ...);
+		}
+	}
+
+	template<std::size_t numPositions>
+	static void UpdateUIPlacements()
+	{
+		UpdateUIPlacementsInternal(std::make_index_sequence<numPositions>{});
+	}
+
+	HOOK_EACH_INIT(YPos, YPosData, YPos_Recalculated);
+}
+
 
 // ============= Fix the onscreen counter bar X placement not scaling to resolution =============
 namespace OnscreenCounterBarFixes
@@ -2079,6 +2063,134 @@ namespace BilinearScriptSprites
 	HOOK_EACH_INIT(Bilinear_Sprite2d, orgSprite2dDraw_Bilinear, Sprite2dDraw_Bilinear);
 }
 
+
+// ============= Restore the gang spawning code to how it was on the PS2, as on PC it's affected by Vice City changes =============
+// ============= + optionally bring back formations that were unused or unfinished on the PS2 =============
+namespace GangFormations
+{
+	struct CPathNode
+	{
+		CVector pos;
+		CPathNode *prev;
+		CPathNode *next;
+		int16_t distance;
+		int16_t objectIndex;
+		int16_t firstLink;
+		uint8_t numLinks;
+
+		uint8_t unkBits : 2;
+		uint8_t bDeadEnd : 1;
+		uint8_t bDisabled : 1;
+		uint8_t bBetweenLevels : 1;
+
+		int8_t group;
+	};
+	static_assert(sizeof(CPathNode) == 0x20);
+
+	class CPathFind
+	{
+	public:
+		CPathNode m_pathNodes[1]; // Usually 4930, but we don't want to assume that, as limit adjusters may expand it
+	};
+
+	static const CVector* s_pNodeVector1;
+	static const CVector* s_pNodeVector2;
+
+	// We need both, as we'll be restoring the original position
+	static CVector* s_pCurrentPedPosition;
+	static CVector s_currentPedPosition;
+
+	static int s_numPeds; // Obtained from inline assembly
+	static int s_loopCounter;
+
+	static bool (__thiscall* orgGeneratePedCreationCoors)(CPathFind* obj, void* x, void* y, void* minDist, void* maxDist, void* minDistOffScreen, void* maxDistOffScreen,
+			CVector* pPosition, int32_t* pNode1, int32_t* pNode2, void* pPositionBetweenNodes, void* camMatrix);
+	// numPeds passed from inline assembly
+	static bool __fastcall GeneratePedCreationCoors_StoreNodePtrs(CPathFind* obj, int numPeds, void* x, void* y, void* minDist, void* maxDist, void* minDistOffScreen, void* maxDistOffScreen,
+			CVector* pPosition, int32_t* pNode1, int32_t* pNode2, void* pPositionBetweenNodes, void* camMatrix)
+	{
+		const bool result = orgGeneratePedCreationCoors(obj, x, y, minDist, maxDist, minDistOffScreen, maxDistOffScreen, pPosition, pNode1, pNode2, pPositionBetweenNodes, camMatrix);
+		if (result)
+		{
+			s_pCurrentPedPosition = pPosition;
+			s_currentPedPosition = *pPosition;
+			s_pNodeVector1 = &obj->m_pathNodes[*pNode1].pos;
+			s_pNodeVector2 = &obj->m_pathNodes[*pNode2].pos;
+
+			s_loopCounter = 0;
+
+			s_numPeds = numPeds;
+		}
+
+		return result;
+	}
+
+	__declspec(naked) static void GeneratePedCreationCoors_StoreNodePtrs_Hook()
+	{
+		_asm
+		{
+			mov		edx, dword ptr [esp+12Ch+4-0F4h] // var_F4 from the outer function
+			jmp		GeneratePedCreationCoors_StoreNodePtrs
+		}
+	}
+
+	static bool (*orgIsPositionClearForPed)(const CVector& pos);
+	static bool IsPositionClearForPed_RestorePosition(CVector* pos)
+	{
+		*pos = CVector(s_currentPedPosition.x, s_currentPedPosition.y, s_currentPedPosition.z + 0.7f);
+
+		const int currentIteration = s_loopCounter++;
+
+		// If this is *not* the last ped in the formation, we will do the clearance check later
+		if (currentIteration + 1 < s_numPeds)
+		{
+			return true;
+		}
+
+		return orgIsPositionClearForPed(*pos);
+	}
+
+	static float (*orgFindGroundZFor3DCoord)(float x, float y, float z, bool* found);
+	static float FindGroundZFor3DCoord_AdjustCoordinates(float /*x*/, float /*y*/, float /*z*/, bool *found)
+	{
+		const float fRandomRatio = (rand() % 256) / 256.0f;
+		const CVector NewPos = *s_pCurrentPedPosition = *s_pNodeVector2 + (*s_pNodeVector1 - *s_pNodeVector2) * fRandomRatio;
+		float result = orgFindGroundZFor3DCoord(NewPos.x, NewPos.y, NewPos.z + 2.0f, found);
+		if (*found)
+		{
+			// Earlier clearance check is skipped for those peds, and we do it now instead
+			*found = orgIsPositionClearForPed(CVector(NewPos.x, NewPos.y, std::max(NewPos.z, result + 0.7f)));
+		}
+		return result;
+	}
+
+	static bool s_bFormationsEnabled = false;
+	static int (*orgGenerationRand)();
+	static int GenerationRand_CheckFormationsOption()
+	{
+		if (!s_bFormationsEnabled)
+		{
+			return 50; // Always generate just 1
+		}
+		return orgGenerationRand();
+	}
+}
+
+
+// ============= Reverted Vice City code changes in CPed::DuckAndCover =============
+// ============= Researched by Nick007J =============
+namespace ConsoleDuckAndCover
+{
+	static void __fastcall GetDuckPos(const CVector& rfWheelPos, const CVector& lfWheelPos, CVector& outDuckPos, const CVehicle* pedInObjective) // Actually CPed*, but we only care about position
+	{
+		const CVector wheelMidpoint = (lfWheelPos + rfWheelPos) * 0.5f;
+		CVector duckDir = pedInObjective->GetPosition() - wheelMidpoint;
+		duckDir.Normalize();
+		outDuckPos = wheelMidpoint - duckDir * 1.5f;
+	}
+}
+
+
 namespace ModelIndicesReadyHook
 {
 	static void (*orgInitialiseObjectData)(const char*);
@@ -2395,6 +2507,58 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 		}
 		TXN_CATCH();
 #endif
+	}
+	TXN_CATCH();
+#endif
+
+
+#if ENABLE_ENHANCEMENT_CONSOLE_BOTTOM_TEXT_PLACEMENTS
+	// Console bottom UI placements
+	if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"ConsoleBottomTextPlacements", -1, wcModulePath); !bLC01 && INIoption != -1) try
+	{
+		using namespace ConsoleUIPlacements;
+
+		bUseConsolePlacements = INIoption != 0;
+
+		auto zone_vehicle_shadow = pattern("D8 0D ? ? ? ? DA 6C 24 ? D8 05 ? ? ? ? D9 1C 24 A1").count(2);
+
+		static constexpr float PS2_ZONE_Y = 61.0f;
+		static constexpr float PS2_VEHICLE_Y = 81.0f;
+		static constexpr float PS2_SUBS_Y = 83.0f;
+		static constexpr float PS2_WASTEDBUSTED_Y = 122.0f;
+
+		std::array<std::pair<void*, float>, 7> YPositions = {{
+			// Zone name
+			{ zone_vehicle_shadow.get(0).get<void>(2), PS2_ZONE_Y },
+			{ get_pattern("D8 0D ? ? ? ? DA 6C 24 ? D9 1C 24 A1 ? ? ? ? 89 44 24 ? 50 DB 44 24 ? 89 44 24 ? D8 0D ? ? ? ? D8 0D ? ? ? ? DA 6C 24 ? D9 1C 24 E8 ? ? ? ? 83 C4 ? 83 3D", 2), PS2_ZONE_Y },
+
+			// Vehicle name
+			{ zone_vehicle_shadow.get(1).get<void>(2), PS2_VEHICLE_Y },
+			{ get_pattern("D8 0D ? ? ? ? DA 6C 24 ? D9 1C 24 A1 ? ? ? ? 89 44 24 ? 50 DB 44 24 ? 89 44 24 ? D8 0D ? ? ? ? D8 0D ? ? ? ? DA 6C 24 ? D9 1C 24 E8 ? ? ? ? 83 C4 ? E8", 2), PS2_VEHICLE_Y },
+
+			// Subtitles
+			{ get_pattern("D9 05 ? ? ? ? D8 CC DA 6C 24 ? DE C1", 2), PS2_SUBS_Y },
+
+			// Wasted/busted
+			{ get_pattern("D8 0D ? ? ? ? DA 6C 24 ? D9 1C 24 A1 ? ? ? ? 89 44 24 ? 50 DB 44 24 ? 89 44 24 ? D8 0D ? ? ? ? D8 0D ? ? ? ? DA 6C 24 ? D8 05", 2), PS2_WASTEDBUSTED_Y - 4.0f },
+			{ get_pattern("D8 0D ? ? ? ? DA 6C 24 ? D9 1C 24 A1 ? ? ? ? 89 44 24 ? 50 DB 44 24 ? 89 44 24 ? D8 0D ? ? ? ? D8 0D ? ? ? ? DA 6C 24 ? D9 1C 24 E8 ? ? ? ? 83 C4 ? EB ? C7 05 ? ? ? ? ? ? ? ? 81 C4", 2), PS2_WASTEDBUSTED_Y },
+		}};
+
+		HookEach_YPos(YPositions, [](void* address, float newPos, std::pair<const float*, float>& original, float& replacement)
+			{
+				InterceptMemDisplacement(address, original.first, replacement);
+				original.second = newPos;
+			});
+
+		if (bUseConsolePlacements)
+		{
+			UpdateUIPlacements<YPositions.size()>();
+		}
+
+		if (bHasDebugMenu)
+		{
+			DebugMenuAddVar("SilentPatch", "Console bottom text placements", &bUseConsolePlacements, UpdateUIPlacements<YPositions.size()>);
+		}
 	}
 	TXN_CATCH();
 #endif
@@ -2739,6 +2903,42 @@ void InjectDelayedPatches_III_Common( bool bHasDebugMenu, const wchar_t* wcModul
 	TXN_CATCH();
 #endif
 
+#if ENABLE_FIX_GANG_FORMATIONS
+	// Restore the gang spawning code to how it was on the PS2, as on PC it's affected by Vice City changes
+	// + optionally bring back formations that were unused or unfinished on the PS2
+	if (const int INIoption = GetPrivateProfileIntW(L"SilentPatch", L"GangFormations", -1, wcModulePath); INIoption != -1) try
+	{
+		using namespace GangFormations;
+
+		s_bFormationsEnabled = INIoption != 0;
+
+		auto vc_code_leftover1 = get_pattern("0F 8D ? ? ? ? E8 ? ? ? ? 85 ED"); // Placing gangsters in a circle
+		// Setting the ped states for group. Big pattern validating the entire chunk of code we're jumping over
+		auto vc_code_leftover2 = get_pattern("C7 83 ? ? ? ? 21 00 00 00 C7 85 ? ? ? ? 21 00 00 00 8D 43 ? FF 70 ? FF 30 8D 45 ? FF 70 ? FF 30 E8 ? ? ? ? D9 9B ? ? ? ? D9 83 ? ? ? ? 83 C4 ? D9 9B");
+
+		auto generate_ped_creation_coors = get_pattern("E8 ? ? ? ? 84 C0 75 ? C7 44 24");
+		auto is_position_clear_for_ped = get_pattern("E8 ? ? ? ? 84 C0 59 0F 84 ? ? ? ? 89 F0");
+		auto find_ground_z = get_pattern("E8 ? ? ? ? D8 05 ? ? ? ? 83 C4 ? 80 BC 24");
+
+		auto generation_rand = get_pattern("E8 ? ? ? ? 0F B7 F0 B8 ? ? ? ? 89 F2 89 D1 F7 EA C1 E9");
+
+		Patch(vc_code_leftover1, { 0x90, 0xE9 }); // jge -> jmp
+		Patch(vc_code_leftover2, { 0xEB, 0x3C }); // Jump over the entire code block
+
+		InterceptCall(generate_ped_creation_coors, orgGeneratePedCreationCoors, GeneratePedCreationCoors_StoreNodePtrs_Hook);
+		InterceptCall(is_position_clear_for_ped, orgIsPositionClearForPed, IsPositionClearForPed_RestorePosition);
+		InterceptCall(find_ground_z, orgFindGroundZFor3DCoord, FindGroundZFor3DCoord_AdjustCoordinates);
+
+		InterceptCall(generation_rand, orgGenerationRand, GenerationRand_CheckFormationsOption);
+
+		if (bHasDebugMenu)
+		{
+			DebugMenuAddVar("SilentPatch", "Gang formations", &s_bFormationsEnabled, nullptr);
+		}
+	}
+	TXN_CATCH();
+#endif
+
 #if ENABLE_SUPPORT_FLA_UTILS
 	FLAUtils::Init(moduleList);
 #endif
@@ -2758,6 +2958,7 @@ void InjectDelayedPatches()
 	InjectDelayedPatches_III_Common( hasDebugMenu, wcModulePath );
 
 	Common::Patches::III_VC_DelayedCommon( hasDebugMenu, wcModulePath );
+	Memory::FlushCodeChanges();
 }
 
 
@@ -2827,18 +3028,6 @@ void Patch_III_10(uint32_t width, uint32_t height)
 		XYMinus<0x509A5E, 0x509A3D, HudMessages>::Hook(0x509A65); // Big message 5
 		X<0x50A139, HudMessages>::Hook(0x50A142); // Big message 2
 		XY<0x57E9EE, 0x57E9CD, MusicManager>::Hook(0x57E9F5); // Radio station name
-	}
-#endif
-
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
-	// RsMouseSetPos call (SA style fix)
-	if (EnsureBindings(RsGlobal))
-	{
-		ReadCall( 0x48E539, orgConstructRenderList );
-		InjectHook(0x48E539, ResetMousePos);
-
-		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581C74);
-		Patch(0x581C74, &pCustomWndProc);
 	}
 #endif
 
@@ -2953,18 +3142,6 @@ void Patch_III_11(uint32_t width, uint32_t height)
 	}
 #endif
 
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
-	// RsMouseSetPos call (SA style fix)
-	if (EnsureBindings(RsGlobal))
-	{
-		ReadCall( 0x48E5F9, orgConstructRenderList );
-		InjectHook(0x48E5F9, ResetMousePos);
-
-		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581FB4);
-		Patch(0x581FB4, &pCustomWndProc);
-	}
-#endif
-
 #if ENABLE_FIX_PRECISE_FRAME_LIMITER
 	// (Hopefully) more precise frame limiter
 	ReadCall( 0x58323D, RsEventHandler );
@@ -3058,19 +3235,6 @@ void Patch_III_Steam(uint32_t width, uint32_t height)
 		XYMinus<0x509ACE, 0x509AAD, HudMessages>::Hook(0x509AD5); // Big message 5
 		X<0x50A1A9, HudMessages>::Hook(0x50A1B2); // Big message 2
 		XY<0x57EC3E, 0x57EC1D, MusicManager>::Hook(0x57EC45); // Radio station name
-	}
-#endif
-
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
-	// RsMouseSetPos call (SA style fix)
-	if (EnsureBindings(RsGlobal))
-	{
-		ReadCall( 0x48E589, orgConstructRenderList );
-		InjectHook(0x48E589, ResetMousePos);
-
-		// New wndproc
-		OldWndProc = *(LRESULT (CALLBACK***)(HWND, UINT, WPARAM, LPARAM))DynBaseAddress(0x581EA4);
-		Patch(0x581EA4, &pCustomWndProc);
 	}
 #endif
 
@@ -4030,6 +4194,85 @@ void Patch_III_Common()
 	}
 	TXN_CATCH();
 #endif
+
+#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
+
+	// Clip the cursor to the game window bounds
+	if (ClipCursorToGameWindow::HasGameBindings()) try
+	{
+		using namespace ClipCursorToGameWindow;
+
+		auto do_rw_stuff_end_of_frame = get_pattern("E8 ? ? ? ? 80 3D ? ? ? ? 00 74 ? E8 ? ? ? ? 83 C4 08");
+		auto def_window_proc = get_pattern("FF 15 ? ? ? ? 83 C4 ? 5D 5F 5E 5B C2", 2);
+
+		InterceptCall(do_rw_stuff_end_of_frame, orgDoRWStuffEndOfFrame, DoRWStuffEndOfFrame_ProcessCursorClip);
+		InterceptMemDisplacement(def_window_proc, orgWindowProc, pClipWindowProcA);
+
+		// Establish the initial state if we loaded late
+		PsGlobalType* ps = RsGlobal.Get().ps;
+		if (ps != nullptr && ps->window != nullptr)
+		{
+			bWindowActive = bWantsCursorClip = GetActiveWindow() == ps->window;
+		}
+	}
+	TXN_CATCH();
+#endif
+
+#if ENABLE_FIX_DUCK_AND_COVER
+	// Reverted Vice City code changes in CPed::DuckAndCover
+	// Researched by Nick007J
+	try
+	{
+		using namespace ConsoleDuckAndCover;
+
+		auto clear_used_as_cover_flag = get_pattern("8B 8B 0C 03 00 00 85 C9 74 ? 8A 51", 2);
+		auto set_used_as_cover_flag = get_pattern("8B B3 0C 03 00 00 85 F6 74 ? 8A 56 ? 80 E2 ? 0F B6 C2 83 F8 ? 75 ? FE 86", 2);
+		auto assign_seek_target = get_pattern("89 AB 0C 03 00 00 E8");
+		auto not_used_as_cover_check = get_pattern("80 BF ? ? ? ? 03 73", 2 + 4);
+		auto heading_rate_1 = get_pattern("C7 83 ? ? ? ? 00 00 20 41 E8");
+		auto heading_rate_2 = get_pattern("C7 83 ? ? ? ? 00 00 70 41 8A 83");
+		auto leave_car_timer = get_pattern("05 F4 01 00 00 C6 44 24 ? ? 89 83", 1);
+
+		auto calculate_duck_pos_start = pattern("8A 85 ? ? ? ? 3C ? 75 ? C7 84 24").get_one();
+		auto calculate_duck_pos_end = get_pattern("DE D9 DE D9 6A 00 6A 00 6A 00 6A 01 6A 01 6A 01 6A 00 FF 35", 4);
+		auto calculate_duck_pos_matrix_dtor = get_pattern("E8 ? ? ? ? EB ? 8D 44 20 ? 8A 83");
+
+		// Replace m_pSeekTarget with m_carInObjective when manipulating bUsedAsCover
+		Patch<int32_t>(clear_used_as_cover_flag, 0x170); // m_carInObjective offset
+		Patch<int32_t>(set_used_as_cover_flag, 0x170); // m_carInObjective offset
+
+		// Don't assign to m_pSeekTarget
+		Nop(assign_seek_target, 6);
+
+		// Turn m_numPedsUseItAsCover < 3 into < 1 to effectively make it a boolean
+		Patch<int8_t>(not_used_as_cover_check, 1);
+
+		// m_headingRate assignments not present on the PS2
+		Nop(heading_rate_1, 10);
+		Nop(heading_rate_2, 10);
+
+		// 500 on PC, 300 on PS2
+		Patch<int32_t>(leave_car_timer, 300);
+
+		// Reimplement the PS2 duckPos code
+
+		// lea ecx, [esp+120h+rfWheelPos]
+		// lea edx, [esp+120h+lfWheelPos]
+		// lea eax, [esp+120h+duckPos]
+		// push dword ptr [ebx].m_pedInObjective
+		// push eax
+		// call GetDuckPos
+		// jmp 4E42B6
+		const std::initializer_list<uint8_t> assembly_prologue =
+			{ 0x8D, 0x4C, 0x24, 0x74, 0x8D, 0x94, 0x24, 0x80, 0x00, 0x00, 0x00, 0x8D, 0x44, 0x24, 0x44, 0xFF, 0xB3, 0x6C, 0x01, 0x00, 0x00, 0x50 };
+		Patch(calculate_duck_pos_start.get<void>(0), assembly_prologue);
+		InjectHook(calculate_duck_pos_start.get<void>(assembly_prologue.size()), GetDuckPos, HookType::Call);
+		InjectHook(calculate_duck_pos_start.get<void>(assembly_prologue.size() + 5), calculate_duck_pos_end, HookType::Jump);
+
+		Nop(calculate_duck_pos_matrix_dtor, 5);
+	}
+	TXN_CATCH();
+#endif
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
@@ -4060,12 +4303,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 #if ENABLE_FIX_DEP_STARTUP_CRASH
 		Common::Patches::FixRwcseg_Patterns();
 #endif
+		Memory::FlushCodeChanges();
 	}
 	else if ( fdwReason == DLL_PROCESS_DETACH )
 	{
-#if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT_CLIPCURSOR
-		ReleaseMouseClip();
-#endif
 		CrashLogger::Uninstall();
 	}
 	return TRUE;

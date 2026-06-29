@@ -103,6 +103,7 @@ void InjectHooks()
 #undef INSTALL_WINDOWED_MODE
 
 	Common::Patches::DDraw_Common();
+	Memory::FlushCodeChanges();
 }
 
 static bool rwcsegUnprotected = false;

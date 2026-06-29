@@ -796,6 +796,11 @@ extern "C" __declspec(naked) void WindowedModeSA_InitD3dDevice()
 
 namespace WindowedModeSA
 {
+	bool IsFramedMode()
+	{
+		return CurrentWindowedMode == WindowedMode::Framed;
+	}
+
 	bool Install(const wchar_t* iniPath)
 	{
 		CurrentWindowedMode = ReadWindowedModeOption(iniPath);
