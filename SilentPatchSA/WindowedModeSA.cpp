@@ -184,61 +184,55 @@ namespace
 		return size;
 	}
 
-	struct MonitorResolution
-	{
-		LONG width;
-		LONG height;
-		LONG area;
-	};
-
-	BOOL CALLBACK FindLargestMonitorResolution(HMONITOR monitor, HDC, LPRECT, LPARAM data)
-	{
-		MONITORINFO info = { sizeof(info) };
-		if (GetMonitorInfoW(monitor, &info) != FALSE)
-		{
-			const LONG width = info.rcMonitor.right - info.rcMonitor.left;
-			const LONG height = info.rcMonitor.bottom - info.rcMonitor.top;
-			const LONG area = width * height;
-			MonitorResolution* largest = reinterpret_cast<MonitorResolution*>(data);
-			if (area > largest->area)
-			{
-				largest->width = width;
-				largest->height = height;
-				largest->area = area;
-			}
-		}
-		return TRUE;
-	}
-
-	POINT GetLargestMonitorResolution()
-	{
-		static const POINT largest = []() {
-			MonitorResolution result = {
-				GetSystemMetrics(SM_CXSCREEN),
-				GetSystemMetrics(SM_CYSCREEN),
-				GetSystemMetrics(SM_CXSCREEN) * GetSystemMetrics(SM_CYSCREEN)
-			};
-			EnumDisplayMonitors(nullptr, nullptr, FindLargestMonitorResolution, reinterpret_cast<LPARAM>(&result));
-			return POINT{ result.width, result.height };
-		}();
-		return largest;
-	}
-
-	bool IsLargestMonitorResolution(uint32_t width, uint32_t height)
-	{
-		const POINT largest = GetLargestMonitorResolution();
-		return width == static_cast<uint32_t>(largest.x) && height == static_cast<uint32_t>(largest.y);
-	}
-
 	RECT GetNearestMonitorRect(POINT point)
 	{
 		HMONITOR monitor = MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
 		MONITORINFO info = { sizeof(info) };
 		if (GetMonitorInfoW(monitor, &info) == FALSE)
 		{
+			info.rcMonitor = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
 			info.rcWork = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
 		}
-		return info.rcWork;
+		return CurrentWindowedMode == WindowedMode::Borderless ? info.rcMonitor : info.rcWork;
+	}
+
+	LONG ClampLong(LONG value, LONG minValue, LONG maxValue)
+	{
+		if (value < minValue)
+		{
+			return minValue;
+		}
+		if (value > maxValue)
+		{
+			return maxValue;
+		}
+		return value;
+	}
+
+	POINT ClampWindowPosition(POINT position, LONG windowWidth, LONG windowHeight, const RECT& monitorRect)
+	{
+		const LONG monitorWidth = monitorRect.right - monitorRect.left;
+		const LONG monitorHeight = monitorRect.bottom - monitorRect.top;
+
+		if (windowWidth >= monitorWidth)
+		{
+			position.x = monitorRect.left;
+		}
+		else
+		{
+			position.x = ClampLong(position.x, monitorRect.left, monitorRect.right - windowWidth);
+		}
+
+		if (windowHeight >= monitorHeight)
+		{
+			position.y = monitorRect.top;
+		}
+		else
+		{
+			position.y = ClampLong(position.y, monitorRect.top, monitorRect.bottom - windowHeight);
+		}
+
+		return position;
 	}
 
 	bool IsWindowRectSane(const RECT& rect)
@@ -289,15 +283,18 @@ namespace
 			return false;
 		}
 
-		position->x = left;
-		position->y = top;
+		const POINT savedCenter = {
+			left + windowWidth / 2,
+			top + windowHeight / 2
+		};
+		*position = ClampWindowPosition({ left, top }, windowWidth, windowHeight, GetNearestMonitorRect(savedCenter));
 		return true;
 	}
 
-	POINT GetDefaultWindowPosition(LONG windowWidth, LONG windowHeight, POINT centerPoint)
+	POINT GetDefaultWindowPosition(LONG windowWidth, LONG windowHeight, POINT centerPoint, bool useSavedPosition = true)
 	{
 		POINT position = {};
-		if (GetSavedWindowPosition(windowWidth, windowHeight, &position))
+		if (useSavedPosition && GetSavedWindowPosition(windowWidth, windowHeight, &position))
 		{
 			return position;
 		}
@@ -305,12 +302,40 @@ namespace
 		const RECT monitorRect = GetNearestMonitorRect(centerPoint);
 		position.x = monitorRect.left + ((monitorRect.right - monitorRect.left) - windowWidth) / 2;
 		position.y = monitorRect.top + ((monitorRect.bottom - monitorRect.top) - windowHeight) / 2;
-		return position;
+		return ClampWindowPosition(position, windowWidth, windowHeight, monitorRect);
+	}
+
+	POINT GetWindowClientCenter(HWND hwnd)
+	{
+		RECT clientRect;
+		if (GetClientRect(hwnd, &clientRect) != FALSE)
+		{
+			POINT clientTopLeft = { clientRect.left, clientRect.top };
+			POINT clientBottomRight = { clientRect.right, clientRect.bottom };
+			if (ClientToScreen(hwnd, &clientTopLeft) != FALSE && ClientToScreen(hwnd, &clientBottomRight) != FALSE)
+			{
+				return {
+					(clientTopLeft.x + clientBottomRight.x) / 2,
+					(clientTopLeft.y + clientBottomRight.y) / 2
+				};
+			}
+		}
+
+		RECT windowRect;
+		if (GetWindowRect(hwnd, &windowRect) != FALSE)
+		{
+			return {
+				(windowRect.left + windowRect.right) / 2,
+				(windowRect.top + windowRect.bottom) / 2
+			};
+		}
+
+		return { GetSystemMetrics(SM_CXSCREEN) / 2, GetSystemMetrics(SM_CYSCREEN) / 2 };
 	}
 
 	void SaveWindowPosition(HWND hwnd)
 	{
-		if (!HasWindowStatePath() || hwnd == nullptr || IsIconic(hwnd) != FALSE)
+		if (CurrentWindowedMode != WindowedMode::Framed || !HasWindowStatePath() || hwnd == nullptr || IsIconic(hwnd) != FALSE)
 		{
 			return;
 		}
@@ -360,9 +385,90 @@ namespace
 		}
 	}
 
+	void ResizeWindowToClient(bool activateWindow = false, bool useSavedPosition = true, const POINT* windowPosition = nullptr);
+
+	bool IsToggleBorderModeShortcut(UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		return message == WM_SYSKEYDOWN && wParam == 'F' && (lParam & (1 << 29)) != 0;
+	}
+
+	bool IsToggleBorderModeSysChar(UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		return message == WM_SYSCHAR && (wParam == 'f' || wParam == 'F') && (lParam & (1 << 29)) != 0;
+	}
+
+	bool IsAltKey(WPARAM wParam)
+	{
+		return wParam == VK_MENU || wParam == VK_LMENU || wParam == VK_RMENU;
+	}
+
+	bool IsAltKeySystemMessage(UINT message, WPARAM wParam)
+	{
+		return (message == WM_SYSKEYDOWN || message == WM_SYSKEYUP) && IsAltKey(wParam);
+	}
+
+	bool IsSystemMenuCommand(UINT message, WPARAM wParam)
+	{
+		return message == WM_SYSCOMMAND && (wParam & 0xFFF0) == SC_KEYMENU;
+	}
+
+	LPARAM RegularKeyLParam(LPARAM lParam)
+	{
+		return lParam & ~(static_cast<LPARAM>(1) << 29);
+	}
+
+	LRESULT CallOriginalWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		return OriginalWndProc != nullptr
+			? CallWindowProcA(OriginalWndProc, hwnd, message, wParam, lParam)
+			: DefWindowProcA(hwnd, message, wParam, lParam);
+	}
+
+	void ToggleBorderMode(HWND hwnd)
+	{
+		if (CurrentWindowedMode == WindowedMode::Off)
+		{
+			return;
+		}
+
+		RECT currentRect;
+		const POINT windowPosition = GetWindowRect(hwnd, &currentRect) != FALSE
+			? POINT{ currentRect.left, currentRect.top }
+			: GetWindowClientCenter(hwnd);
+		const bool switchingToBorderless = CurrentWindowedMode == WindowedMode::Framed;
+		if (switchingToBorderless)
+		{
+			SaveWindowPosition(hwnd);
+			CurrentWindowedMode = WindowedMode::Borderless;
+		}
+		else
+		{
+			CurrentWindowedMode = WindowedMode::Framed;
+		}
+
+		ResizeWindowToClient(CurrentWindowedMode == WindowedMode::Borderless, false, &windowPosition);
+	}
+
 	LRESULT CALLBACK WindowedModeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
-		if (message == WM_SETCURSOR)
+		if (IsToggleBorderModeShortcut(message, wParam, lParam))
+		{
+			ToggleBorderMode(hwnd);
+			return 0;
+		}
+		else if (IsToggleBorderModeSysChar(message, wParam, lParam))
+		{
+			return 0;
+		}
+		else if (IsAltKeySystemMessage(message, wParam))
+		{
+			return CallOriginalWndProc(hwnd, message == WM_SYSKEYDOWN ? WM_KEYDOWN : WM_KEYUP, wParam, RegularKeyLParam(lParam));
+		}
+		else if (IsSystemMenuCommand(message, wParam))
+		{
+			return 0;
+		}
+		else if (message == WM_SETCURSOR)
 		{
 			const WORD hitTest = LOWORD(lParam);
 			if (hitTest != HTCLIENT)
@@ -382,9 +488,7 @@ namespace
 			SaveWindowPosition(hwnd);
 		}
 
-		return OriginalWndProc != nullptr
-			? CallWindowProcA(OriginalWndProc, hwnd, message, wParam, lParam)
-			: DefWindowProcA(hwnd, message, wParam, lParam);
+		return CallOriginalWndProc(hwnd, message, wParam, lParam);
 	}
 
 	void HookWindowProc()
@@ -419,7 +523,7 @@ namespace
 
 	bool IsUsableWindowedVideoMode(const DisplayMode& mode)
 	{
-		return mode.width != 0 && mode.height != 0 && !IsLargestMonitorResolution(mode.width, mode.height);
+		return mode.width != 0 && mode.height != 0;
 	}
 
 	bool SetClientSizeFromMode(const DisplayMode& mode)
@@ -628,7 +732,7 @@ namespace
 		params->PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
 	}
 
-	void ResizeWindowToClient()
+	void ResizeWindowToClient(bool activateWindow, bool useSavedPosition, const POINT* windowPosition)
 	{
 		if (Window == nullptr)
 		{
@@ -638,20 +742,31 @@ namespace
 		const DWORD style = GetWindowedModeWindowStyle();
 		const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtrW(Window, GWL_EXSTYLE));
 		RECT rect = WindowRectForClient(ClientSize, style, exStyle);
-
-		RECT currentRect;
-		GetWindowRect(Window, &currentRect);
 		const LONG windowWidth = rect.right - rect.left;
 		const LONG windowHeight = rect.bottom - rect.top;
-		const POINT windowCenter = {
-			(currentRect.left + currentRect.right) / 2,
-			(currentRect.top + currentRect.bottom) / 2
-		};
-		const POINT position = GetDefaultWindowPosition(windowWidth, windowHeight, windowCenter);
+		const POINT position = windowPosition != nullptr
+			? *windowPosition
+			: GetDefaultWindowPosition(windowWidth, windowHeight, GetWindowClientCenter(Window), useSavedPosition);
+		const bool isBorderless = CurrentWindowedMode == WindowedMode::Borderless;
+		const bool shouldActivate = activateWindow && CurrentWindowedMode == WindowedMode::Borderless;
 
 		SetWindowLongPtrW(Window, GWL_STYLE, style);
-		SetWindowPos(Window, nullptr, position.x, position.y, windowWidth, windowHeight,
-			SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+		SetWindowPos(Window, isBorderless ? HWND_TOPMOST : HWND_NOTOPMOST,
+			position.x, position.y, windowWidth, windowHeight,
+			SWP_NOOWNERZORDER | (shouldActivate ? 0 : SWP_NOACTIVATE) | SWP_FRAMECHANGED);
+		if (shouldActivate)
+		{
+			SetForegroundWindow(Window);
+			SetActiveWindow(Window);
+			SetFocus(Window);
+			SetWindowPos(Window, HWND_TOPMOST, position.x, position.y, windowWidth, windowHeight,
+				SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+		}
+		else if (!isBorderless)
+		{
+			SetWindowPos(Window, HWND_NOTOPMOST, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+		}
 	}
 
 	HRESULT __stdcall ResetHook(IDirect3DDevice9* self, D3DPRESENT_PARAMETERS* params)
@@ -671,6 +786,10 @@ namespace
 
 		if (hasResolvedMode)
 		{
+			if (PreviousVideoMode != UINT32_MAX)
+			{
+				RestoreVideoMode(PreviousVideoMode);
+			}
 			RestoreVideoMode(resolvedMode);
 			SetClientSizeFromVideoMode(resolvedMode);
 			SetFrontendVideoMode(resolvedMode);

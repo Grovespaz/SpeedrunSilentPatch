@@ -1286,6 +1286,31 @@ char* GetMyDocumentsPathSA()
 	return pDocumentsPath;
 }
 
+static bool UserFileExistsSA(const char* fileName)
+{
+	const char* userFilesPath = GetMyDocumentsPathSA();
+	if (userFilesPath == nullptr || userFilesPath[0] == '\0')
+	{
+		return false;
+	}
+
+	char path[MAX_PATH];
+	strcpy_s(path, userFilesPath);
+	if (PathAppendA(path, fileName) == FALSE)
+	{
+		return false;
+	}
+
+	const DWORD attributes = GetFileAttributesA(path);
+	return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+static bool ShouldPatchDefaultDesktopResolutionSA(bool windowedMode)
+{
+	// Mode index 0 can be an explicit saved resolution, but the game treats it as "no saved mode".
+	return !windowedMode || !WindowedModeSA::IsFramedMode() || UserFileExistsSA("gta_sa.set");
+}
+
 #if ENABLE_FIX_ACCIDENTAL_CHEATS
 namespace CheatInput
 {

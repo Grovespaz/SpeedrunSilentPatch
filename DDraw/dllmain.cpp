@@ -36,6 +36,34 @@ extern "C" HRESULT WINAPI DirectDrawCreateEx(GUID FAR *lpGUID, LPVOID *lplpDD, R
 ExternalRef<const char[]> ppUserFilesDir;
 static HINSTANCE hThisModule;
 
+namespace
+{
+	bool UserFileExists(const char* fileName)
+	{
+		const char* userFilesPath = Common::GetMyDocumentsPath();
+		if (userFilesPath == nullptr || userFilesPath[0] == '\0')
+		{
+			return false;
+		}
+
+		char path[MAX_PATH];
+		strcpy_s(path, userFilesPath);
+		if (PathAppendA(path, fileName) == FALSE)
+		{
+			return false;
+		}
+
+		const DWORD attributes = GetFileAttributesA(path);
+		return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+	}
+
+	bool ShouldPatchDefaultDesktopResolution(bool windowedMode, const char* settingsFileName)
+	{
+		// Mode index 0 can be an explicit saved resolution, but the game treats it as "no saved mode".
+		return !windowedMode || !WindowedModeDDraw::IsFramedMode() || UserFileExists(settingsFileName);
+	}
+}
+
 void InjectHooks()
 {
 	static char		aNoDesktopMode[64];
@@ -56,14 +84,16 @@ void InjectHooks()
 		// III 1.0
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x580C16));
 		const bool windowedMode = INSTALL_WINDOWED_MODE(III10);
-		Common::Patches::DDraw_III_10( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
+		const bool patchDefaultDesktopResolution = ShouldPatchDefaultDesktopResolution(windowedMode, "gta3.set");
+		Common::Patches::DDraw_III_10( patchDefaultDesktopResolution ? width : 0, patchDefaultDesktopResolution ? height : 0, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x5C2135) == 0xB85548EC)
 	{
 		// III 1.1
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x580F66));
 		const bool windowedMode = INSTALL_WINDOWED_MODE(III11);
-		Common::Patches::DDraw_III_11( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
+		const bool patchDefaultDesktopResolution = ShouldPatchDefaultDesktopResolution(windowedMode, "gta3.set");
+		Common::Patches::DDraw_III_11( patchDefaultDesktopResolution ? width : 0, patchDefaultDesktopResolution ? height : 0, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x5C6FD5) == 0xB85548EC)
 	{
@@ -77,14 +107,16 @@ void InjectHooks()
 		// VC 1.0
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x6022AA));
 		const bool windowedMode = INSTALL_WINDOWED_MODE(VC10);
-		Common::Patches::DDraw_VC_10( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
+		const bool patchDefaultDesktopResolution = ShouldPatchDefaultDesktopResolution(windowedMode, "gta_vc.set");
+		Common::Patches::DDraw_VC_10( patchDefaultDesktopResolution ? width : 0, patchDefaultDesktopResolution ? height : 0, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x667C45) == 0xB85548EC)
 	{
 		// VC 1.1
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x60228A));
 		const bool windowedMode = INSTALL_WINDOWED_MODE(VC11);
-		Common::Patches::DDraw_VC_11( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
+		const bool patchDefaultDesktopResolution = ShouldPatchDefaultDesktopResolution(windowedMode, "gta_vc.set");
+		Common::Patches::DDraw_VC_11( patchDefaultDesktopResolution ? width : 0, patchDefaultDesktopResolution ? height : 0, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x666BA5) == 0xB85548EC)
 	{
@@ -97,7 +129,8 @@ void InjectHooks()
 		// VC Japanese
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x60204A));
 		const bool windowedMode = INSTALL_WINDOWED_MODE(VCJP);
-		Common::Patches::DDraw_VC_JP( windowedMode ? 0 : width, windowedMode ? 0 : height, aNoDesktopMode );
+		const bool patchDefaultDesktopResolution = ShouldPatchDefaultDesktopResolution(windowedMode, "gta_vc.set");
+		Common::Patches::DDraw_VC_JP( patchDefaultDesktopResolution ? width : 0, patchDefaultDesktopResolution ? height : 0, aNoDesktopMode );
 	}
 
 #undef INSTALL_WINDOWED_MODE
