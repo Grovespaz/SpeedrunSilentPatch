@@ -1286,31 +1286,6 @@ char* GetMyDocumentsPathSA()
 	return pDocumentsPath;
 }
 
-static bool UserFileExistsSA(const char* fileName)
-{
-	const char* userFilesPath = GetMyDocumentsPathSA();
-	if (userFilesPath == nullptr || userFilesPath[0] == '\0')
-	{
-		return false;
-	}
-
-	char path[MAX_PATH];
-	strcpy_s(path, userFilesPath);
-	if (PathAppendA(path, fileName) == FALSE)
-	{
-		return false;
-	}
-
-	const DWORD attributes = GetFileAttributesA(path);
-	return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
-}
-
-static bool ShouldPatchDefaultDesktopResolutionSA(bool windowedMode)
-{
-	// Mode index 0 can be an explicit saved resolution, but the game treats it as "no saved mode".
-	return !windowedMode || !WindowedModeSA::IsFramedMode() || UserFileExistsSA("gta_sa.set");
-}
-
 #if ENABLE_FIX_ACCIDENTAL_CHEATS
 namespace CheatInput
 {
@@ -7262,7 +7237,6 @@ BOOL InjectDelayedPatches_10_Speedrun()
 void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 {
 	using namespace Memory;
-	bool windowedMode = false;
 	wchar_t wcModulePath[MAX_PATH];
 	GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), wcModulePath, _countof(wcModulePath) - 3);
 	PathRenameExtensionW(wcModulePath, L".ini");
@@ -7277,7 +7251,7 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 
 #if ENABLE_ENHANCEMENT_WINDOWED_MODE
 	{
-		windowedMode = WindowedModeSA::Install(wcModulePath);
+		WindowedModeSA::Install(wcModulePath);
 	}
 #endif
 
@@ -7367,17 +7341,14 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 
 #if ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION
 	// Default resolution to native resolution
-	if (!windowedMode || !WindowedModeSA::IsFramedMode())
-	{
-		const auto [width, height] = GetDesktopResolution();
-		sprintf_s(aNoDesktopMode, "Cannot find %ux%ux32 video mode", width, height);
+	const auto [width, height] = GetDesktopResolution();
+	sprintf_s(aNoDesktopMode, "Cannot find %ux%ux32 video mode", width, height);
 
-		if (width != 0 && height != 0)
-		{
-			Patch<DWORD>(0x746363, width);
-			Patch<DWORD>(0x746368, height);
-			Patch<const char*>(0x7463C8, aNoDesktopMode);
-		}
+	if (width != 0 && height != 0)
+	{
+		Patch<DWORD>(0x746363, width);
+		Patch<DWORD>(0x746368, height);
+		Patch<const char*>(0x7463C8, aNoDesktopMode);
 	}
 #endif
 

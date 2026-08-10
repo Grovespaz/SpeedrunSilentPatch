@@ -170,6 +170,8 @@ namespace
 	std::vector<DisplayMode> VideoModesBackup;
 	uint32_t PreviousVideoMode = UINT32_MAX;
 	WindowedMode CurrentWindowedMode = WindowedMode::Off;
+	bool AlwaysOnTop = false;
+	bool InternalWindowPlacement = false;
 	char WindowStatePath[MAX_PATH] = {};
 
 	using ResetFunc = HRESULT(__stdcall*)(void*, D3D8PresentParameters*);
@@ -198,6 +200,8 @@ namespace
 
 	WindowedMode ReadWindowedModeOption(HINSTANCE module, const wchar_t* iniName)
 	{
+		AlwaysOnTop = false;
+
 		wchar_t path[MAX_PATH];
 		if (GetModuleFileNameW(module, path, _countof(path)) == 0)
 		{
@@ -209,6 +213,7 @@ namespace
 
 		wchar_t value[32];
 		GetPrivateProfileStringW(L"SilentPatch", L"WindowedMode", L"0", value, _countof(value), path);
+		AlwaysOnTop = GetPrivateProfileIntW(L"SilentPatch", L"AlwaysOnTop", 0, path) != 0;
 		return ParseWindowedModeOption(value);
 	}
 
@@ -320,7 +325,7 @@ namespace
 
 		if (windowWidth >= monitorWidth)
 		{
-			position.x = monitorRect.left;
+			position.x = ClampLong(position.x, monitorRect.right - windowWidth, monitorRect.left);
 		}
 		else
 		{
@@ -329,7 +334,7 @@ namespace
 
 		if (windowHeight >= monitorHeight)
 		{
-			position.y = monitorRect.top;
+			position.y = ClampLong(position.y, monitorRect.bottom - windowHeight, monitorRect.top);
 		}
 		else
 		{
@@ -541,6 +546,13 @@ namespace
 			: DefWindowProcA(hwnd, message, wParam, lParam);
 	}
 
+	bool IsInternalWindowPlacementMessage(UINT message)
+	{
+		return InternalWindowPlacement &&
+			(message == WM_WINDOWPOSCHANGING || message == WM_WINDOWPOSCHANGED ||
+				message == WM_SIZE || message == WM_MOVE);
+	}
+
 	void ToggleBorderMode(HWND hwnd)
 	{
 		if (CurrentWindowedMode == WindowedMode::Off)
@@ -568,7 +580,11 @@ namespace
 
 	LRESULT CALLBACK WindowedModeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
-		if (IsToggleBorderModeShortcut(message, wParam, lParam))
+		if (IsInternalWindowPlacementMessage(message))
+		{
+			return 0;
+		}
+		else if (IsToggleBorderModeShortcut(message, wParam, lParam))
 		{
 			ToggleBorderMode(hwnd);
 			return 0;
@@ -871,11 +887,12 @@ namespace
 		const POINT position = windowPosition != nullptr
 			? *windowPosition
 			: GetDefaultWindowPosition(windowWidth, windowHeight, GetWindowClientCenter(Window), useSavedPosition);
-		const bool isBorderless = CurrentWindowedMode == WindowedMode::Borderless;
 		const bool shouldActivate = activateWindow && CurrentWindowedMode == WindowedMode::Borderless;
 
 		SetWindowLongPtrW(Window, GWL_STYLE, style);
-		SetWindowPos(Window, isBorderless ? HWND_TOPMOST : HWND_NOTOPMOST,
+		const bool wasInternalWindowPlacement = InternalWindowPlacement;
+		InternalWindowPlacement = true;
+		SetWindowPos(Window, AlwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST,
 			position.x, position.y, windowWidth, windowHeight,
 			SWP_NOOWNERZORDER | (shouldActivate ? 0 : SWP_NOACTIVATE) | SWP_FRAMECHANGED);
 		if (shouldActivate)
@@ -883,14 +900,11 @@ namespace
 			SetForegroundWindow(Window);
 			SetActiveWindow(Window);
 			SetFocus(Window);
-			SetWindowPos(Window, HWND_TOPMOST, position.x, position.y, windowWidth, windowHeight,
+			SetWindowPos(Window, AlwaysOnTop ? HWND_TOPMOST : HWND_TOP,
+				position.x, position.y, windowWidth, windowHeight,
 				SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
 		}
-		else if (!isBorderless)
-		{
-			SetWindowPos(Window, HWND_NOTOPMOST, 0, 0, 0, 0,
-				SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
-		}
+		InternalWindowPlacement = wasInternalWindowPlacement;
 	}
 
 	HRESULT __stdcall ResetHook(void* self, D3D8PresentParameters* params)
