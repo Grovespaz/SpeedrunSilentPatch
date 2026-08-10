@@ -345,6 +345,24 @@ namespace ClipCursorToGameWindow
 		}
 	}
 
+	static bool IsGameWindowForeground(HWND window)
+	{
+		HWND foreground = GetForegroundWindow();
+		return foreground == window || (foreground != nullptr && GetAncestor(foreground, GA_ROOT) == window);
+	}
+
+	static void RefreshWindowActiveState_JP()
+	{
+		PsGlobalType* ps = RsGlobal.Get().ps;
+		const bool windowActive = ps != nullptr && ps->window != nullptr && IsGameWindowForeground(ps->window);
+
+		bWindowActive = bWantsCursorClip = windowActive;
+		if (!windowActive)
+		{
+			UnconfineCursor();
+		}
+	}
+
 	static WNDPROC* orgWindowProc;
 	static LRESULT CALLBACK ClipWindowProcA(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
@@ -411,25 +429,10 @@ namespace ClipCursorToGameWindow
 		orgRsCameraShowRaster(camera);
 	}
 
-	static void (*orgConstructRenderList_JP)();
-	static void ConstructRenderList_ProcessCursorClip_JP()
+	static void RsCameraShowRaster_ProcessCursorClip_JP(void* camera)
 	{
-		PsGlobalType* ps = RsGlobal.Get().ps;
-		if (ps != nullptr && ps->window != nullptr)
-		{
-			bWindowActive = bWantsCursorClip = GetActiveWindow() == ps->window;
-		}
-
-		if (bIsFrontEndActive.Get())
-		{
-			DoClipCursor_InMenu();
-		}
-		else
-		{
-			DoClipCursor_InGame();
-		}
-
-		orgConstructRenderList_JP();
+		RefreshWindowActiveState_JP();
+		RsCameraShowRaster_ProcessCursorClip(camera);
 	}
 }
 #endif
@@ -3448,13 +3451,19 @@ void Patch_VC_JP(uint32_t width, uint32_t height)
 #endif
 
 #if ENABLE_FIX_MOUSE_WINDOW_CONFINEMENT
-	// JP is not supported upstream, so hook the known render-list call directly.
+	// Clip the cursor to the game window bounds
 	if (ClipCursorToGameWindow::HasGameBindings()) try
 	{
 		using namespace ClipCursorToGameWindow;
 
-		ReadCall(0x4A5765, orgConstructRenderList_JP);
-		InjectHook(0x4A5765, ConstructRenderList_ProcessCursorClip_JP);
+		InterceptCall(0x4A5A88, orgRsCameraShowRaster, RsCameraShowRaster_ProcessCursorClip_JP);
+
+		// Establish the initial state if we loaded late
+		PsGlobalType* ps = RsGlobal.Get().ps;
+		if (ps != nullptr && ps->window != nullptr)
+		{
+			bWindowActive = bWantsCursorClip = GetActiveWindow() == ps->window;
+		}
 	}
 	TXN_CATCH();
 #endif
