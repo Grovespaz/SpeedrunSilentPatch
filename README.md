@@ -65,6 +65,7 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Fix mouse window confinement to no longer have stutter
 - Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
 - Copyrighted ambience music in the Pole Position Club and the Malibu Club is replaced with default VC ambience, and Publicity Tour cutscene audio has music removed, to prevent DMCA-strikes on video and streaming platforms like Youtube and Twitch. Toggleable in ini with `ReplaceDMCAMusic`.
+- All startup movies in the Japanese executable of Vice City can be skipped with `SkipIntroSplashes` or the `/SkipIntroSplashes` command-line argument when using the DDraw component.
 
 ## GTASA
 

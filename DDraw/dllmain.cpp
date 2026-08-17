@@ -4,6 +4,7 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <shellapi.h>
 #include <Shlwapi.h>
 #include <ShlObj.h>
 #include "Utils/MemoryMgr.h"
@@ -35,6 +36,44 @@ extern "C" HRESULT WINAPI DirectDrawCreateEx(GUID FAR *lpGUID, LPVOID *lplpDD, R
 
 ExternalRef<const char[]> ppUserFilesDir;
 static HINSTANCE hThisModule;
+
+#if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
+static bool IsIniOptionEnabled(const wchar_t* iniName, const wchar_t* optionName)
+{
+	wchar_t path[MAX_PATH];
+	if (GetModuleFileNameW(hThisModule, path, _countof(path)) == 0)
+	{
+		return false;
+	}
+
+	PathRemoveFileSpecW(path);
+	PathAppendW(path, iniName);
+	return GetPrivateProfileIntW(L"SilentPatch", optionName, 0, path) != 0;
+}
+
+static bool HasCommandLineArgument(const wchar_t* argument)
+{
+	int argumentCount;
+	LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount);
+	if (arguments == nullptr)
+	{
+		return false;
+	}
+
+	bool found = false;
+	for (int i = 1; i < argumentCount; i++)
+	{
+		if (_wcsicmp(arguments[i], argument) == 0)
+		{
+			found = true;
+			break;
+		}
+	}
+
+	LocalFree(arguments);
+	return found;
+}
+#endif
 
 void InjectHooks()
 {
@@ -96,6 +135,22 @@ void InjectHooks()
 	{
 		// VC Japanese
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x60204A));
+
+#if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
+#if defined(SILENTPATCH_SPEEDRUN)
+		constexpr const wchar_t* iniName = L"SpeedrunSilentPatchVC.ini";
+#else
+		constexpr const wchar_t* iniName = L"SilentPatchVC.ini";
+#endif
+		if (IsIniOptionEnabled(iniName, L"SkipIntroSplashes") ||
+				HasCommandLineArgument(L"/SkipIntroSplashes"))
+		{
+			// Skip the warning, Rockstar, Capcom, and GTA title movies. Redirect the first
+			// movie state to GS_INIT_ONCE after its movie/COM cleanup, since no clip was opened.
+			Memory::DynBase::Patch<uintptr_t>(0x6D3BF4, Memory::DynBaseAddress<uintptr_t>(0x600108));
+		}
+#endif
+
 		INSTALL_WINDOWED_MODE(VCJP);
 		Common::Patches::DDraw_VC_JP( width, height, aNoDesktopMode );
 	}
