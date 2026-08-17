@@ -3563,8 +3563,9 @@ void Patch_VC_Common()
 	// Alt+F4
 	try
 	{
-		auto addr = pattern( "59 59 31 C0 83 C4 70 5D 5F 5E 5B C2 10 00" ).count(2);
-		auto dest = get_pattern( "53 55 56 FF B4 24 90 00 00 00 FF 15" );
+		// VC JP uses a smaller stack frame than the other executables (60h/80h instead of 70h/90h).
+		auto addr = pattern( "59 59 31 C0 83 C4 ? 5D 5F 5E 5B C2 10 00" ).count(2);
+		auto dest = get_pattern( "53 55 56 FF B4 24 ? 00 00 00 FF 15" );
 
 		addr.for_each_result( [&]( pattern_match match ) {
 			InjectHook( match.get<void>( 2 ), dest, HookType::Jump );

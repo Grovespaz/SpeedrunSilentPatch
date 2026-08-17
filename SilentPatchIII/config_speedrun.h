@@ -14,6 +14,8 @@
 #define ENABLE_FIX_USER_FILES_PATH 1
 // Mouse sensitivity is now properly saved - like in the 1.1 and Steam versions.
 #define ENABLE_FIX_MOUSE_SENSITIVITY_SAVE 1
+// Alt+F4 closes the game instead of being swallowed by the game's window procedure.
+#define ENABLE_FIX_ALT_F4 1
 // Mission title and 'Mission Passed' texts now stay on screen for the same duration, regardless of screen resolution.
 #define ENABLE_FIX_MISSION_TEXT_DURATION 1
 // Free resprays will not carry on a New Game now.
