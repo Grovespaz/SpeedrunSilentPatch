@@ -13,8 +13,8 @@
 // Fixed a crash on car explosions - most likely to happen when playing with a multi-monitor setup.
 #define ENABLE_FIX_CAR_EXPLOSION_CRASH 1
 // Fixed a streaming-related deadlock, which could occasionally result in the game being stuck on a black screen when entering or exiting interiors (this is the issue people used to fix by setting CPU affinity to one core).
-// This is disabled in favor of the CPU affinity fix, which is more in the spirit of SSP.
-#define ENABLE_FIX_CDSTREAM_DEADLOCK 0
+// This was disabled in favor of the CPU affinity fix, which was more in the spirit of SSP, but the leaderboard mods decided to allow this fix to be enabled for speedrunning purposes, to level the FPS playing field.
+#define ENABLE_FIX_CDSTREAM_DEADLOCK 1
 // The game process can now be forced to a configured CPU affinity, defaulting to one core.
 #define ENABLE_FIX_CPU_AFFINITY 1
 // Fixed Skimmer not spawning on Windows 11 24H2.
