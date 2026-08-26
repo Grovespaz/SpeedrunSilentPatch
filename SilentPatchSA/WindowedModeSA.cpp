@@ -735,7 +735,7 @@ namespace
 		params->BackBufferFormat = D3DFMT_A8R8G8B8;
 		params->SwapEffect = D3DSWAPEFFECT_DISCARD;
 		params->FullScreen_RefreshRateInHz = 0;
-		params->PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+		params->PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 
 		UpdateVideoMode();
 	}
@@ -767,7 +767,7 @@ namespace
 		params->Windowed = TRUE;
 		params->hDeviceWindow = Window;
 		params->FullScreen_RefreshRateInHz = 0;
-		params->PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+		params->PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 	}
 
 	void ResizeWindowToClient(bool activateWindow, bool useSavedPosition, const POINT* windowPosition)
