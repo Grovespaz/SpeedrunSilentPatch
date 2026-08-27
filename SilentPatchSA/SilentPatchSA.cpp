@@ -7100,7 +7100,7 @@ static DWORD_PTR ReadProcessAffinityMaskOption(const wchar_t* iniPath)
 	constexpr DWORD_PTR DEFAULT_AFFINITY_MASK = 1;
 
 	wchar_t value[32];
-	GetPrivateProfileStringW(L"SilentPatch", L"CpuAffinityMask", L"1", value, _countof(value), iniPath);
+	GetPrivateProfileStringW(L"SilentPatch", L"CpuAffinityMask", L"0", value, _countof(value), iniPath);
 
 	int parsedValue = 0;
 	if (StrToIntExW(value, STIF_SUPPORT_HEX, &parsedValue) == FALSE || parsedValue < 0)

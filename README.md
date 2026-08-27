@@ -21,7 +21,7 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 * GTA VC - Japanese version (1.0 and 1.1 should also work, but aren't tested)
 * GTA SA - 1.0 *only* (but the homie recruiting is fixed like it is in 1.01)
 
-# SpeedrunSilentPatch Proposed Fixes (WIP)
+# SpeedrunSilentPatch Fixes
 
 ## GTA3
 
@@ -61,8 +61,6 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - All censorships from German and French versions of the game have been removed.
 
 Custom SpeedrunSilentPatch fixes not in original SilentPatch:
-- Allow game to boot even if your machine has no disc drives (WIP)
-- Fix mouse window confinement to no longer have stutter
 - Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
 - Copyrighted ambience music in the Pole Position Club and the Malibu Club is replaced with default VC ambience, and Publicity Tour cutscene audio has music removed, to prevent DMCA-strikes on video and streaming platforms like Youtube and Twitch. Toggleable in ini with `ReplaceDMCAMusic`.
 - All startup movies in the Japanese executable of Vice City can be skipped with `SkipIntroSplashes` or the `/SkipIntroSplashes` command-line argument when using the DDraw component.
@@ -75,6 +73,7 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Fixed a crash on car explosions - most likely to happen when playing with a multi-monitor setup.
 - Fixed a streaming-related deadlock, which could occasionally result in the game being stuck on a black screen when entering or exiting interiors (this is the issue people used to fix by setting CPU affinity to one core).
 - Fixed Skimmer not spawning on Windows 11 24H2.
+- The mouse cursor is now locked to the game window instead of getting re-centered constantly, so rapid mouse movements can no longer cause the cursor to leave the window in multi-monitor setups.
 - The mouse's vertical axis sensitivity now matches the horizontal axis sensitivity.
 - Num5 is now bindable (like in the 1.01 patch).
 - Dancing minigame timings have been improved, now they do not lose accuracy over time depending on the PC's uptime.
@@ -94,10 +93,11 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - WASD-cheat preventer. By default, you have to hold Shift for any cheat to work. Other options are: Normal (like vanilla), Off (disable cheats entirely), CapsLock (cheats only work when Caps Lock is on), or ScrollLock (cheats only work when Scroll Lock is on)
 - Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
+- Copyrighted ambience music in the casinos, Pleasure Domes, Stadium, Lowrider challenge, beach party and the strip club can be replaced with default San Andreas ambience to help prevent DMCA strikes on video and streaming platforms. Disabled by default, toggleable with setting in .ini file.
+- Cpu affinity mask (aka core pinning) setting through ini. No longer needed, because SpeedrunSilentPatch patches the bug that caused crashes when running on more than one core. Off by default.
 
 ## Nice to haves (would require additional scripting)
 
-- Forced DMCA audio removal
 - Some sort of anticheat/antitamper
 - Fix default options (steer with mouse etc)
 
