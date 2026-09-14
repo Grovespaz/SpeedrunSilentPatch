@@ -4,6 +4,8 @@
 
 #define ENABLE_FIX_NO_DIRECTPLAY 1
 #define ENABLE_FIX_DEP_STARTUP_CRASH 1
+// Supply the App ID expected by the legacy Steam DRM wrappers when the EXE is launched directly.
+#define ENABLE_FIX_STEAM_DIRECT_LAUNCH 1
 #define ENABLE_FIX_FAKE_VRAM_POLL 1
 #define ENABLE_FIX_USER_FILES_PATH 1
 #define ENABLE_FIX_IMG_NO_BUFFERING 1

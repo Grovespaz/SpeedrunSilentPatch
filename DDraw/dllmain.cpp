@@ -557,8 +557,72 @@ static bool PatchIAT_ByPointers()
 	return true;
 }
 
+#if ENABLE_FIX_STEAM_DIRECT_LAUNCH
+static const wchar_t* GetSteamAppIdForCurrentExecutable()
+{
+	const HINSTANCE hInstance = GetModuleHandle(nullptr);
+	const PIMAGE_DOS_HEADER dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(hInstance);
+	if ( dosHeader->e_magic != IMAGE_DOS_SIGNATURE )
+	{
+		return nullptr;
+	}
+
+	const PIMAGE_NT_HEADERS ntHeader = reinterpret_cast<PIMAGE_NT_HEADERS>(
+		reinterpret_cast<DWORD_PTR>(hInstance) + dosHeader->e_lfanew);
+	if ( ntHeader->Signature != IMAGE_NT_SIGNATURE )
+	{
+		return nullptr;
+	}
+
+	struct SteamExecutable
+	{
+		DWORD timeDateStamp;
+		DWORD entryPoint;
+		DWORD imageSize;
+		const wchar_t* appId;
+	};
+
+	static constexpr SteamExecutable steamExecutables[] =
+	{
+		{ 0x4C2CC921, 0x005912ED, 0x005E9000, L"12100" }, // GTA III
+		{ 0x48982736, 0x006402ED, 0x00696000, L"12110" }, // GTA Vice City
+	};
+
+	for ( const SteamExecutable& executable : steamExecutables )
+	{
+		if ( ntHeader->FileHeader.TimeDateStamp == executable.timeDateStamp &&
+			ntHeader->OptionalHeader.AddressOfEntryPoint == executable.entryPoint &&
+			ntHeader->OptionalHeader.SizeOfImage == executable.imageSize )
+		{
+			return executable.appId;
+		}
+	}
+	return nullptr;
+}
+
+static void SetSteamAppIdForDirectLaunch()
+{
+	wchar_t existingAppId[2];
+	if ( GetEnvironmentVariableW(L"SteamAppId", existingAppId, _countof(existingAppId)) != 0 )
+	{
+		return;
+	}
+
+	if ( const wchar_t* appId = GetSteamAppIdForCurrentExecutable(); appId != nullptr )
+	{
+		SetEnvironmentVariableW(L"SteamAppId", appId);
+	}
+}
+#endif
+
 static void ApplyDDrawHooks()
 {
+#if ENABLE_FIX_STEAM_DIRECT_LAUNCH
+	// Imported DLLs initialize before the Steam wrapper's entry point, so provide
+	// the launch context before it attempts to identify the application.
+	SetSteamAppIdForDirectLaunch();
+#endif
+
 #if ENABLE_FIX_DEP_STARTUP_CRASH
 	rwcsegUnprotected = FixRwcseg_Header();
 #endif
