@@ -11940,6 +11940,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 		auto Protect2 = ScopedUnprotect::Section(hInstance, ".rdata");
 
 		const int8_t version = Memory::GetVersion().version;
+		CrashLogger::SetSAGameVersion(version);
 #if defined(SILENTPATCH_SPEEDRUN)
 		if ( version == 0 ) Patch_SA_10_Speedrun(hInstance);
 		else ShowSpeedrunUnsupportedVersionMessage();

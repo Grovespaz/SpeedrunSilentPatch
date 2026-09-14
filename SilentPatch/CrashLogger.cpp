@@ -44,6 +44,10 @@ namespace CrashLogger
 		LPTOP_LEVEL_EXCEPTION_FILTER g_previousFilter = nullptr;
 		volatile LONG g_loggedCrash = 0;
 
+#if defined(_GTA_SA)
+		volatile LONG g_saGameVersion = -1;
+#endif
+
 		class LogFile
 		{
 		public:
@@ -195,6 +199,466 @@ namespace CrashLogger
 			UNREFERENCED_PARAMETER(context);
 #endif
 		}
+
+#if defined(_GTA_SA) && defined(_M_IX86)
+		struct SAScriptLayout
+		{
+			uintptr_t scriptSpace;
+			size_t scriptSpaceSize;
+			uintptr_t scripts;
+			size_t scriptCount;
+			size_t scriptSize;
+			uintptr_t idleScripts;
+			uintptr_t activeScripts;
+		};
+
+		// Classic GTA SA 1.0 layout. Other executable versions deliberately do
+		// not fall back to these addresses, as reporting no context is preferable
+		// to interpreting unrelated memory as a CRunningScript.
+		constexpr SAScriptLayout SA_10_SCRIPT_LAYOUT = {
+			0x00A49960, 200000,
+			0x00A8B430, 96, 0xE0,
+			0x00A8B428, 0x00A8B42C
+		};
+
+		constexpr size_t SA_SCRIPT_OFFSET_PREVIOUS = 0x00;
+		constexpr size_t SA_SCRIPT_OFFSET_NEXT = 0x04;
+		constexpr size_t SA_SCRIPT_OFFSET_NAME = 0x08;
+		constexpr size_t SA_SCRIPT_OFFSET_BASE_IP = 0x10;
+		constexpr size_t SA_SCRIPT_OFFSET_CURRENT_IP = 0x14;
+		constexpr size_t SA_SCRIPT_OFFSET_STACK_POINTER = 0x38;
+		constexpr size_t SA_SCRIPT_OFFSET_IS_ACTIVE = 0xC4;
+		constexpr size_t SA_SCRIPT_OFFSET_CONDITION_RESULT = 0xC5;
+		constexpr size_t SA_SCRIPT_OFFSET_USE_MISSION_CLEANUP = 0xC6;
+		constexpr size_t SA_SCRIPT_OFFSET_IS_EXTERNAL = 0xC7;
+		constexpr size_t SA_SCRIPT_OFFSET_WAKE_TIME = 0xCC;
+		constexpr size_t SA_SCRIPT_OFFSET_IS_MISSION = 0xDC;
+
+		bool IsReadableProtection(DWORD protection)
+		{
+			if ((protection & (PAGE_GUARD | PAGE_NOACCESS)) != 0)
+			{
+				return false;
+			}
+
+			switch (protection & 0xFF)
+			{
+			case PAGE_READONLY:
+			case PAGE_READWRITE:
+			case PAGE_WRITECOPY:
+			case PAGE_EXECUTE_READ:
+			case PAGE_EXECUTE_READWRITE:
+			case PAGE_EXECUTE_WRITECOPY:
+				return true;
+			default:
+				return false;
+			}
+		}
+
+		bool SafeCopyMemory(void* destination, const void* source, size_t size)
+		{
+			if (size == 0)
+			{
+				return true;
+			}
+			if (destination == nullptr || source == nullptr)
+			{
+				return false;
+			}
+
+			const uintptr_t firstAddress = reinterpret_cast<uintptr_t>(source);
+			if (firstAddress > uintptr_t(-1) - size)
+			{
+				return false;
+			}
+
+			uintptr_t currentAddress = firstAddress;
+			auto* output = static_cast<unsigned char*>(destination);
+			size_t remaining = size;
+
+			while (remaining != 0)
+			{
+				MEMORY_BASIC_INFORMATION memoryInfo = {};
+				if (VirtualQuery(reinterpret_cast<const void*>(currentAddress), &memoryInfo, sizeof(memoryInfo)) != sizeof(memoryInfo) ||
+					memoryInfo.State != MEM_COMMIT || !IsReadableProtection(memoryInfo.Protect))
+				{
+					return false;
+				}
+
+				const uintptr_t regionStart = reinterpret_cast<uintptr_t>(memoryInfo.BaseAddress);
+				if (currentAddress < regionStart)
+				{
+					return false;
+				}
+
+				const size_t offsetInRegion = currentAddress - regionStart;
+				if (offsetInRegion >= memoryInfo.RegionSize)
+				{
+					return false;
+				}
+
+				const size_t available = memoryInfo.RegionSize - offsetInRegion;
+				const size_t toCopy = remaining < available ? remaining : available;
+				__try
+				{
+					std::memcpy(output, reinterpret_cast<const void*>(currentAddress), toCopy);
+				}
+				__except (EXCEPTION_EXECUTE_HANDLER)
+				{
+					return false;
+				}
+
+				currentAddress += toCopy;
+				output += toCopy;
+				remaining -= toCopy;
+			}
+
+			return true;
+		}
+
+		template <typename T>
+		bool SafeRead(uintptr_t address, T& value)
+		{
+			return SafeCopyMemory(&value, reinterpret_cast<const void*>(address), sizeof(value));
+		}
+
+		template <typename T>
+		T ReadSnapshotValue(const unsigned char* snapshot, size_t offset)
+		{
+			T value = {};
+			std::memcpy(&value, snapshot + offset, sizeof(value));
+			return value;
+		}
+
+		bool GetSAScriptLayout(SAScriptLayout& layout, LONG& version)
+		{
+			version = InterlockedCompareExchange(&g_saGameVersion, 0, 0);
+			if (version != 0)
+			{
+				return false;
+			}
+
+			layout = SA_10_SCRIPT_LAYOUT;
+			return true;
+		}
+
+		bool GetSAScriptSlot(const SAScriptLayout& layout, uintptr_t address, size_t& slot)
+		{
+			if (address < layout.scripts || layout.scriptSize == 0)
+			{
+				return false;
+			}
+
+			const uintptr_t offset = address - layout.scripts;
+			if ((offset % layout.scriptSize) != 0)
+			{
+				return false;
+			}
+
+			const uintptr_t candidateSlot = offset / layout.scriptSize;
+			if (candidateSlot >= layout.scriptCount)
+			{
+				return false;
+			}
+
+			slot = static_cast<size_t>(candidateSlot);
+			return true;
+		}
+
+		bool GetOffsetInRange(uintptr_t address, uintptr_t rangeStart, size_t rangeSize, size_t& offset)
+		{
+			if (address < rangeStart)
+			{
+				return false;
+			}
+
+			const uintptr_t rangeOffset = address - rangeStart;
+			if (rangeOffset >= rangeSize)
+			{
+				return false;
+			}
+
+			offset = static_cast<size_t>(rangeOffset);
+			return true;
+		}
+
+		bool AddSignedOffset(uintptr_t address, int offset, uintptr_t& result)
+		{
+			if (offset < 0)
+			{
+				const uintptr_t distance = static_cast<uintptr_t>(-offset);
+				if (address < distance)
+				{
+					return false;
+				}
+				result = address - distance;
+				return true;
+			}
+
+			const uintptr_t distance = static_cast<uintptr_t>(offset);
+			if (address > uintptr_t(-1) - distance)
+			{
+				return false;
+			}
+			result = address + distance;
+			return true;
+		}
+
+		void WriteScriptListPointer(LogFile& log, const char* name, uintptr_t storageAddress, const SAScriptLayout& layout)
+		{
+			DWORD pointerValue = 0;
+			if (!SafeRead(storageAddress, pointerValue))
+			{
+				log.Printf("  %-7s <unreadable at 0x%p>\r\n", name, reinterpret_cast<void*>(storageAddress));
+				return;
+			}
+
+			size_t slot = 0;
+			if (pointerValue == 0)
+			{
+				log.Printf("  %-7s 0x00000000 (null)\r\n", name);
+			}
+			else if (GetSAScriptSlot(layout, pointerValue, slot))
+			{
+				log.Printf("  %-7s 0x%08X (slot %zu)\r\n", name, pointerValue, slot);
+			}
+			else
+			{
+				log.Printf("  %-7s 0x%08X (outside script array)\r\n", name, pointerValue);
+			}
+		}
+
+		void WriteMemoryWindow(LogFile& log, uintptr_t currentIP)
+		{
+			if (currentIP == 0)
+			{
+				log.Write("    Bytes around CurrentIP: unavailable (null pointer)\r\n");
+				return;
+			}
+
+			log.Write("    Bytes around CurrentIP (-16..+31; ?? = unreadable):\r\n");
+			for (int lineOffset = -16; lineOffset <= 16; lineOffset += 16)
+			{
+				uintptr_t lineAddress = 0;
+				if (!AddSignedOffset(currentIP, lineOffset, lineAddress))
+				{
+					log.Printf("      %c <address overflow>\r\n", lineOffset == 0 ? '>' : ' ');
+					continue;
+				}
+
+				char bytes[(16 * 3) + 1] = {};
+				size_t outputOffset = 0;
+				for (int byteIndex = 0; byteIndex < 16; ++byteIndex)
+				{
+					uintptr_t byteAddress = 0;
+					unsigned char value = 0;
+					const bool readable = AddSignedOffset(lineAddress, byteIndex, byteAddress) && SafeRead(byteAddress, value);
+					const int written = readable
+						? sprintf_s(bytes + outputOffset, _countof(bytes) - outputOffset, "%02X ", value)
+						: sprintf_s(bytes + outputOffset, _countof(bytes) - outputOffset, "?? ");
+					if (written <= 0)
+					{
+						break;
+					}
+					outputOffset += static_cast<size_t>(written);
+				}
+
+				log.Printf("      %c 0x%p: %s\r\n", lineOffset == 0 ? '>' : ' ',
+					reinterpret_cast<void*>(lineAddress), bytes);
+			}
+		}
+
+		struct SAScriptCandidate
+		{
+			uintptr_t address;
+			const char* registerName;
+			int stackOffset;
+		};
+
+		bool AddSAScriptCandidate(SAScriptCandidate* candidates, size_t& candidateCount, size_t candidateCapacity,
+			uintptr_t address, const char* registerName, int stackOffset, const SAScriptLayout& layout)
+		{
+			size_t ignoredSlot = 0;
+			if (!GetSAScriptSlot(layout, address, ignoredSlot))
+			{
+				return false;
+			}
+
+			for (size_t i = 0; i < candidateCount; ++i)
+			{
+				if (candidates[i].address == address)
+				{
+					return true;
+				}
+			}
+
+			if (candidateCount >= candidateCapacity)
+			{
+				return false;
+			}
+
+			candidates[candidateCount++] = { address, registerName, stackOffset };
+			return true;
+		}
+
+		void WriteSAScriptCandidate(LogFile& log, const SAScriptCandidate& candidate, const SAScriptLayout& layout)
+		{
+			size_t slot = 0;
+			GetSAScriptSlot(layout, candidate.address, slot);
+			if (candidate.registerName != nullptr)
+			{
+				log.Printf("\r\n  Candidate slot %zu from %s = 0x%p:\r\n", slot, candidate.registerName,
+					reinterpret_cast<void*>(candidate.address));
+			}
+			else
+			{
+				log.Printf("\r\n  Candidate slot %zu from [ESP+0x%02X] = 0x%p:\r\n", slot, candidate.stackOffset,
+					reinterpret_cast<void*>(candidate.address));
+			}
+
+			unsigned char snapshot[0xE0] = {};
+			if (!SafeCopyMemory(snapshot, reinterpret_cast<const void*>(candidate.address), sizeof(snapshot)))
+			{
+				log.Write("    Script object is not fully readable.\r\n");
+				return;
+			}
+
+			char printableName[9] = {};
+			for (size_t i = 0; i < 8; ++i)
+			{
+				const unsigned char value = snapshot[SA_SCRIPT_OFFSET_NAME + i];
+				printableName[i] = value >= 0x20 && value <= 0x7E ? static_cast<char>(value) : '.';
+			}
+
+			const DWORD previous = ReadSnapshotValue<DWORD>(snapshot, SA_SCRIPT_OFFSET_PREVIOUS);
+			const DWORD next = ReadSnapshotValue<DWORD>(snapshot, SA_SCRIPT_OFFSET_NEXT);
+			const DWORD baseIP = ReadSnapshotValue<DWORD>(snapshot, SA_SCRIPT_OFFSET_BASE_IP);
+			const DWORD currentIP = ReadSnapshotValue<DWORD>(snapshot, SA_SCRIPT_OFFSET_CURRENT_IP);
+			const WORD stackPointer = ReadSnapshotValue<WORD>(snapshot, SA_SCRIPT_OFFSET_STACK_POINTER);
+			const DWORD wakeTime = ReadSnapshotValue<DWORD>(snapshot, SA_SCRIPT_OFFSET_WAKE_TIME);
+
+			log.Printf("    Name:       \"%s\" (hex %02X %02X %02X %02X %02X %02X %02X %02X)\r\n",
+				printableName,
+				snapshot[SA_SCRIPT_OFFSET_NAME + 0], snapshot[SA_SCRIPT_OFFSET_NAME + 1],
+				snapshot[SA_SCRIPT_OFFSET_NAME + 2], snapshot[SA_SCRIPT_OFFSET_NAME + 3],
+				snapshot[SA_SCRIPT_OFFSET_NAME + 4], snapshot[SA_SCRIPT_OFFSET_NAME + 5],
+				snapshot[SA_SCRIPT_OFFSET_NAME + 6], snapshot[SA_SCRIPT_OFFSET_NAME + 7]);
+			log.Printf("    Links:      previous=0x%08X next=0x%08X\r\n", previous, next);
+			log.Printf("    BaseIP:     0x%08X\r\n", baseIP);
+			log.Printf("    CurrentIP:  0x%08X\r\n", currentIP);
+			log.Printf("    State:      active=%u condition=%u missionCleanup=%u external=%u mission=%u SP=%u wakeTime=%u\r\n",
+				snapshot[SA_SCRIPT_OFFSET_IS_ACTIVE], snapshot[SA_SCRIPT_OFFSET_CONDITION_RESULT],
+				snapshot[SA_SCRIPT_OFFSET_USE_MISSION_CLEANUP], snapshot[SA_SCRIPT_OFFSET_IS_EXTERNAL],
+				snapshot[SA_SCRIPT_OFFSET_IS_MISSION], stackPointer, wakeTime);
+
+			size_t scriptSpaceOffset = 0;
+			if (GetOffsetInRange(currentIP, layout.scriptSpace, layout.scriptSpaceSize, scriptSpaceOffset))
+			{
+				log.Printf("    SCM offset: 0x%zX (CurrentIP is inside ScriptSpace)\r\n", scriptSpaceOffset);
+			}
+			else
+			{
+				log.Write("    SCM offset: unavailable (CurrentIP is outside ScriptSpace)\r\n");
+			}
+
+			if (baseIP != 0 && currentIP >= baseIP && (currentIP - baseIP) <= 0x01000000)
+			{
+				log.Printf("    IP relative to BaseIP: 0x%X\r\n", currentIP - baseIP);
+			}
+			else
+			{
+				log.Write("    IP relative to BaseIP: unavailable or implausible\r\n");
+			}
+
+			WriteMemoryWindow(log, currentIP);
+		}
+
+		void WriteSAScriptContextImpl(LogFile& log, const CONTEXT* context)
+		{
+			log.Write("\r\nSA script context:\r\n");
+
+			LONG version = -1;
+			SAScriptLayout layout = {};
+			if (!GetSAScriptLayout(layout, version))
+			{
+				if (version < 0)
+				{
+					log.Write("  Unavailable: the game version was not identified before the crash.\r\n");
+				}
+				else
+				{
+					log.Printf("  Unavailable: no safe script layout is known for game version %ld.\r\n", version);
+				}
+				return;
+			}
+
+			log.Write("  Layout: GTA SA 1.0, ScriptSpace=0x00A49960, Scripts=0x00A8B430 (96 x 0xE0)\r\n");
+			WriteScriptListPointer(log, "Idle:", layout.idleScripts, layout);
+			WriteScriptListPointer(log, "Active:", layout.activeScripts, layout);
+
+			if (context == nullptr)
+			{
+				log.Write("  No CPU context is available for script candidate discovery.\r\n");
+				return;
+			}
+
+			SAScriptCandidate candidates[8] = {};
+			size_t candidateCount = 0;
+			const struct
+			{
+				const char* name;
+				DWORD value;
+			} registers[] = {
+				{ "ECX", context->Ecx }, { "ESI", context->Esi }, { "EDI", context->Edi },
+				{ "EBX", context->Ebx }, { "EAX", context->Eax }, { "EDX", context->Edx },
+				{ "EBP", context->Ebp }
+			};
+
+			for (const auto& reg : registers)
+			{
+				AddSAScriptCandidate(candidates, candidateCount, _countof(candidates), reg.value, reg.name, -1, layout);
+			}
+
+			// If no register retains `this`, inspect only the first 128 bytes of the
+			// captured stack.
+			if (candidateCount == 0)
+			{
+				for (int offset = 0; offset < 0x80 && candidateCount < _countof(candidates); offset += sizeof(DWORD))
+				{
+					uintptr_t stackAddress = 0;
+					DWORD value = 0;
+					if (AddSignedOffset(context->Esp, offset, stackAddress) && SafeRead(stackAddress, value))
+					{
+						AddSAScriptCandidate(candidates, candidateCount, _countof(candidates), value, nullptr, offset, layout);
+					}
+				}
+			}
+
+			if (candidateCount == 0)
+			{
+				log.Write("  No register or bounded near-stack value points to an aligned script slot.\r\n");
+				log.Write("  This is expected for crashes before script startup and for crashes outside the SCM interpreter.\r\n");
+				return;
+			}
+
+			for (size_t i = 0; i < candidateCount; ++i)
+			{
+				WriteSAScriptCandidate(log, candidates[i], layout);
+			}
+		}
+
+		void WriteSAScriptContext(LogFile& log, const CONTEXT* context)
+		{
+			__try
+			{
+				WriteSAScriptContextImpl(log, context);
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
+				log.Write("\r\nSA script context:\r\n  Logging aborted after an unexpected memory access failure.\r\n");
+			}
+		}
+#endif
 
 		struct DbgHelpApi
 		{
@@ -385,6 +849,9 @@ namespace CrashLogger
 
 			WriteExceptionInformation(log, exceptionInfo->ExceptionRecord);
 			WriteRegisters(log, exceptionInfo->ContextRecord);
+#if defined(_GTA_SA) && defined(_M_IX86)
+			WriteSAScriptContext(log, exceptionInfo->ContextRecord);
+#endif
 			WriteStackTrace(log, exceptionInfo->ContextRecord);
 			WriteModuleList(log);
 			log.Write("============================================================\r\n");
@@ -410,11 +877,24 @@ namespace CrashLogger
 	void Install(HINSTANCE module)
 	{
 		g_module = module;
+#if defined(_GTA_SA)
+		InterlockedExchange(&g_saGameVersion, -1);
+#endif
 		g_previousFilter = SetUnhandledExceptionFilter(UnhandledExceptionFilter);
 	}
 
+#if defined(_GTA_SA)
+	void SetSAGameVersion(int version)
+	{
+		InterlockedExchange(&g_saGameVersion, version);
+	}
+#endif
+
 	void Uninstall()
 	{
+#if defined(_GTA_SA)
+		InterlockedExchange(&g_saGameVersion, -1);
+#endif
 		if (g_previousFilter != nullptr)
 		{
 			SetUnhandledExceptionFilter(g_previousFilter);
