@@ -37,6 +37,64 @@ extern "C" HRESULT WINAPI DirectDrawCreateEx(GUID FAR *lpGUID, LPVOID *lplpDD, R
 ExternalRef<const char[]> ppUserFilesDir;
 static HINSTANCE hThisModule;
 
+#if ENABLE_FIX_CPU_AFFINITY
+#if defined(SILENTPATCH_SPEEDRUN)
+static constexpr const wchar_t* III_INI_NAME = L"SpeedrunSilentPatchIII.ini";
+static constexpr const wchar_t* VC_INI_NAME = L"SpeedrunSilentPatchVC.ini";
+#else
+static constexpr const wchar_t* III_INI_NAME = L"SilentPatchIII.ini";
+static constexpr const wchar_t* VC_INI_NAME = L"SilentPatchVC.ini";
+#endif
+
+static DWORD_PTR ReadProcessAffinityMaskOption(const wchar_t* iniPath)
+{
+	constexpr DWORD_PTR DEFAULT_AFFINITY_MASK = 1;
+
+	wchar_t value[32];
+	GetPrivateProfileStringW(L"SilentPatch", L"CpuAffinityMask", L"0", value, _countof(value), iniPath);
+
+	int parsedValue = 0;
+	if (StrToIntExW(value, STIF_SUPPORT_HEX, &parsedValue) == FALSE || parsedValue < 0)
+	{
+		return DEFAULT_AFFINITY_MASK;
+	}
+	return static_cast<DWORD_PTR>(parsedValue);
+}
+
+static void ApplyConfiguredProcessAffinity(const wchar_t* iniName)
+{
+	wchar_t iniPath[MAX_PATH];
+	if (GetModuleFileNameW(hThisModule, iniPath, _countof(iniPath)) == 0)
+	{
+		return;
+	}
+
+	PathRemoveFileSpecW(iniPath);
+	PathAppendW(iniPath, iniName);
+
+	const DWORD_PTR requestedAffinity = ReadProcessAffinityMaskOption(iniPath);
+	if (requestedAffinity == 0)
+	{
+		return;
+	}
+
+	DWORD_PTR processAffinity = 0;
+	DWORD_PTR systemAffinity = 0;
+	DWORD_PTR affinityToApply = requestedAffinity;
+	if (GetProcessAffinityMask(GetCurrentProcess(), &processAffinity, &systemAffinity) != FALSE)
+	{
+		const DWORD_PTR availableAffinity = processAffinity != 0 ? processAffinity : systemAffinity;
+		const DWORD_PTR compatibleAffinity = requestedAffinity & availableAffinity;
+		if (compatibleAffinity != 0)
+		{
+			affinityToApply = compatibleAffinity;
+		}
+	}
+
+	SetProcessAffinityMask(GetCurrentProcess(), affinityToApply);
+}
+#endif
+
 #if ENABLE_FIX_VC_JP_NO_CD_BOOTSTRAP
 static decltype(LoadLibraryA)* pOrgLoadLibraryA;
 static decltype(GetProcAddress)* pOrgGetProcAddress;
@@ -261,6 +319,10 @@ void InjectHooks()
 {
 	static char		aNoDesktopMode[64];
 
+#if ENABLE_FIX_CPU_AFFINITY
+	const wchar_t* affinityIniName = nullptr;
+#endif
+
 	const auto [width, height] = GetDesktopResolution();
 	sprintf_s(aNoDesktopMode, "Cannot find %ux%ux32 video mode", width, height);
 
@@ -275,6 +337,9 @@ void InjectHooks()
 	if (*(DWORD*)Memory::DynBaseAddress(0x5C1E75) == 0xB85548EC)
 	{
 		// III 1.0
+#if ENABLE_FIX_CPU_AFFINITY
+		affinityIniName = III_INI_NAME;
+#endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x580C16));
 		INSTALL_WINDOWED_MODE(III10);
 		Common::Patches::DDraw_III_10( width, height, aNoDesktopMode );
@@ -282,6 +347,9 @@ void InjectHooks()
 	else if (*(DWORD*)Memory::DynBaseAddress(0x5C2135) == 0xB85548EC)
 	{
 		// III 1.1
+#if ENABLE_FIX_CPU_AFFINITY
+		affinityIniName = III_INI_NAME;
+#endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x580F66));
 		INSTALL_WINDOWED_MODE(III11);
 		Common::Patches::DDraw_III_11( width, height, aNoDesktopMode );
@@ -289,6 +357,9 @@ void InjectHooks()
 	else if (*(DWORD*)Memory::DynBaseAddress(0x5C6FD5) == 0xB85548EC)
 	{
 		// III Steam
+#if ENABLE_FIX_CPU_AFFINITY
+		affinityIniName = III_INI_NAME;
+#endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x580E66));
 		Common::Patches::DDraw_III_Steam( width, height, aNoDesktopMode );
 	}
@@ -296,6 +367,9 @@ void InjectHooks()
 	else if (*(DWORD*)Memory::DynBaseAddress(0x667BF5) == 0xB85548EC)
 	{
 		// VC 1.0
+#if ENABLE_FIX_CPU_AFFINITY
+		affinityIniName = VC_INI_NAME;
+#endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x6022AA));
 		INSTALL_WINDOWED_MODE(VC10);
 		Common::Patches::DDraw_VC_10( width, height, aNoDesktopMode );
@@ -303,6 +377,9 @@ void InjectHooks()
 	else if (*(DWORD*)Memory::DynBaseAddress(0x667C45) == 0xB85548EC)
 	{
 		// VC 1.1
+#if ENABLE_FIX_CPU_AFFINITY
+		affinityIniName = VC_INI_NAME;
+#endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x60228A));
 		INSTALL_WINDOWED_MODE(VC11);
 		Common::Patches::DDraw_VC_11( width, height, aNoDesktopMode );
@@ -310,12 +387,18 @@ void InjectHooks()
 	else if (*(DWORD*)Memory::DynBaseAddress(0x666BA5) == 0xB85548EC)
 	{
 		// VC Steam
+#if ENABLE_FIX_CPU_AFFINITY
+		affinityIniName = VC_INI_NAME;
+#endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x601ECA));
 		Common::Patches::DDraw_VC_Steam( width, height, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x601048) == 0x5E5F5D60)
 	{
 		// VC Japanese
+#if ENABLE_FIX_CPU_AFFINITY
+		affinityIniName = VC_INI_NAME;
+#endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x60204A));
 
 #if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
@@ -338,6 +421,13 @@ void InjectHooks()
 	}
 
 #undef INSTALL_WINDOWED_MODE
+
+#if ENABLE_FIX_CPU_AFFINITY
+	if (affinityIniName != nullptr)
+	{
+		ApplyConfiguredProcessAffinity(affinityIniName);
+	}
+#endif
 
 	Common::Patches::DDraw_Common();
 	Memory::FlushCodeChanges();

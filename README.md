@@ -40,6 +40,7 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 
 Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
+- CPU affinity mask (core pinning), toggleable in the INI and off by default. Needed in very rare cases, for example when spamming replays while entering Portland crashes the game for you.
 
 ## GTAVC
 
@@ -62,6 +63,7 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 
 Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
+- CPU affinity mask (core pinning), toggleable in the INI and off by default. Needed in very rare cases.
 - Copyrighted ambience music in the Pole Position Club and the Malibu Club is replaced with default VC ambience, and Publicity Tour cutscene audio has music removed, to prevent DMCA-strikes on video and streaming platforms like Youtube and Twitch. Toggleable in ini with `ReplaceDMCAMusic`.
 - All startup movies in the Japanese executable of Vice City can be skipped with `SkipIntroSplashes` or the `/SkipIntroSplashes` command-line argument when using the DDraw component.
 

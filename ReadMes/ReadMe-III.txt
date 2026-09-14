@@ -36,7 +36,9 @@ INCLUDED FIXES
 
 	SpeedrunSilentPatch-only fixes:
 	- Windowed mode is available, inspired by III.VC.SA.WindowedMode.
-	- Repair Alt+F4 functionality.
+	- CPU affinity can be configured through the INI file. Disabled by default.
+	  This is only needed in very rare cases, for example if spamming replays while entering Portland
+	  crashes the game for you.
 	
 
 
@@ -63,6 +65,8 @@ CONFIGURATION
 		`Borderless` = Borderless
 	  See below for more advanced usages of windowed mode.
 	* AlwaysOnTop - Keeps the game on top of all other windows when running in windowed mode.
+	* CpuAffinityMask - Allows you to set III's process affinity, pinning it to one core, for example.
+	  Set it to 0 to disable affinity forcing (the default).
 
 WINDOWED MODE
 

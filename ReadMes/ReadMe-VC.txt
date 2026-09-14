@@ -37,10 +37,11 @@ INCLUDED FIXES
 	
 	SpeedrunSilentPatch-only fixes:
 	- Windowed mode is available, inspired by III.VC.SA.WindowedMode.
+	- CPU affinity can be configured through the INI file. Disabled by default.
+	  This is only needed in very rare cases.
 	- Copyrighted ambience music in the Pole Position Club and the Malibu Club as well as the Publicity Tour mission, can be replaced
 	  with default Vice City ambience to help prevent DMCA strikes on video and streaming platforms.
 	  Disabled by default, toggleable with setting in .ini file
-	- Repair Alt+F4 functionality.
 
 
 INSTALLATION
@@ -66,6 +67,8 @@ CONFIGURATION
 		`Borderless` = Borderless
 	  See below for more advanced usages of windowed mode.
 	* AlwaysOnTop - Keeps the game on top of all other windows when running in windowed mode.
+	* CpuAffinityMask - Allows you to set VC's process affinity, pinning it to one core, for example.
+	  Set it to 0 to disable affinity forcing (the default).
 	* ReplaceDMCAMusic - replaces copyrighted ambience music in the strip club
 	  					 and Malibu Club with neutral ambience.
 	* SkipIntroSplashes - Skips all startup videos and proceeds directly to the loading screen.
