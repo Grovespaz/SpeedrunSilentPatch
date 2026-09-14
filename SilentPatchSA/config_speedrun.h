@@ -4,6 +4,11 @@
 
 #define ENABLE_SUPPORT_DELAYED_PATCHING 1
 
+// Display the SpeedrunSilentPatch package build in the front-end menu render.
+#define ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT 1
+// 0: startup menus only, 1: startup and pause menus.
+#define SPEEDRUN_VERSION_TEXT_ALL_MENUS 1
+
 // The mouse should not lock up randomly when exiting the menu on newer systems anymore.
 #define ENABLE_FIX_MOUSE_MENU_LOCKUP 1
 // The mouse will no longer go beyond the game window dimensions, making it possible to play the game on multi-monitor setups without problems.

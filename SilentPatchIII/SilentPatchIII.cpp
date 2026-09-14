@@ -101,6 +101,115 @@ static ExternalRef<RsGlobalType> RsGlobal;
 // Technically part of CMenuManager, but we only need this boolean
 static ExternalRef<bool> bIsFrontEndActive("80 3D ? ? ? ? 00 74 ? 80 3D ? ? ? ? 01 0F 85", 2);
 
+#if ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT
+namespace SpeedrunVersionText
+{
+	using DrawScreen = void (__thiscall*)(void* menuManager);
+
+	static void (*SetScale)(float x, float y);
+	static void (*SetColor)(const CRGBA& color);
+	static void (*SetBackgroundOff)();
+	static void (*SetJustifyOn)();
+	static void (*SetPropOn)();
+	static void (*SetFontStyle)(short style);
+	static void (*SetDropShadowPosition)(short position);
+	static void (*PrintString)(float x, float y, const wchar_t* text);
+	static void (*orgDrawFonts)();
+	static void* menuManagerForNextFlush;
+
+	template<size_t Index>
+	static DrawScreen orgDrawScreen;
+
+#define SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL(value) #value
+#define SPEEDRUN_VERSION_TEXT_STRINGIZE(value) SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL(value)
+#define SPEEDRUN_VERSION_TEXT_WIDEN_DETAIL(value) L##value
+#define SPEEDRUN_VERSION_TEXT_WIDEN(value) SPEEDRUN_VERSION_TEXT_WIDEN_DETAIL(value)
+	static wchar_t Text[] = L"SPEEDRUNSILENTPATCH BUILD " SPEEDRUN_VERSION_TEXT_WIDEN(SPEEDRUN_VERSION_TEXT_STRINGIZE(SILENTPATCH_BUILD_ID));
+#undef SPEEDRUN_VERSION_TEXT_WIDEN
+#undef SPEEDRUN_VERSION_TEXT_WIDEN_DETAIL
+#undef SPEEDRUN_VERSION_TEXT_STRINGIZE
+#undef SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL
+
+	static bool ShouldDraw(const void* menuManager)
+	{
+#if SPEEDRUN_VERSION_TEXT_ALL_MENUS
+		UNREFERENCED_PARAMETER(menuManager);
+		return true;
+#else
+		return *reinterpret_cast<const bool*>(reinterpret_cast<const uint8_t*>(menuManager) + 0x116);
+#endif
+	}
+
+	static void Draw(const void* menuManager)
+	{
+		if (!ShouldDraw(menuManager)) return;
+
+		const float widthScale = static_cast<float>(RsGlobal.Get().MaximumWidth) / 640.0f;
+		const float heightScale = static_cast<float>(RsGlobal.Get().MaximumHeight) / 448.0f;
+		const float x = 10.0f * widthScale;
+		const float y = static_cast<float>(RsGlobal.Get().MaximumHeight) - (18.0f * heightScale);
+
+		SetBackgroundOff();
+		SetPropOn();
+		SetJustifyOn();
+		SetFontStyle(2);
+		SetDropShadowPosition(0);
+		SetScale(0.35f * widthScale, 0.45f * heightScale);
+
+		SetColor(CRGBA(220, 220, 220, 220));
+		PrintString(x, y, Text);
+	}
+
+	template<size_t Index>
+	static void __fastcall DrawScreen_Hook(void* menuManager, void*)
+	{
+		orgDrawScreen<Index>(menuManager);
+		menuManagerForNextFlush = menuManager;
+	}
+
+	static void DrawFonts_Hook()
+	{
+		void* const menuManager = menuManagerForNextFlush;
+		menuManagerForNextFlush = nullptr;
+
+		// AddSpriteToBank already flushes a bank when it reaches capacity. Queue the
+		// label with the menu text and retain the game's one original font flush.
+		if (menuManager != nullptr)
+			Draw(menuManager);
+
+		orgDrawFonts();
+	}
+
+	static void Install() try
+	{
+		using namespace Memory;
+		using namespace hook::txn;
+
+		// The active-page dispatch immediately preceding CFont::DrawFonts. The earlier
+		// transition-page call is intentionally left untouched so the text is queued once.
+		auto dispatch = get_pattern<uint8_t>("89 D9 E8 ? ? ? ? EB 12 89 D9 E8 ? ? ? ? EB 09 ? ? 89 D9 E8 ? ? ? ? E8 ? ? ? ?");
+
+		InterceptCall(dispatch + 22, orgDrawScreen<2>, DrawScreen_Hook<2>);
+		InterceptCall(dispatch + 2, orgDrawScreen<0>, DrawScreen_Hook<0>);
+		InterceptCall(dispatch + 11, orgDrawScreen<1>, DrawScreen_Hook<1>);
+		InterceptCall(dispatch + 27, orgDrawFonts, DrawFonts_Hook);
+
+		// All CFont entry points are in one stable block. Resolve that block through
+		// Draw's first SetBackgroundOff call so we don't rely on static addresses.
+		ReadCall(reinterpret_cast<uintptr_t>(orgDrawScreen<2>) + 0x11, SetBackgroundOff);
+		const uintptr_t fontBase = reinterpret_cast<uintptr_t>(SetBackgroundOff);
+		SetScale = reinterpret_cast<decltype(SetScale)>(fontBase - 0x170);
+		SetColor = reinterpret_cast<decltype(SetColor)>(fontBase - 0x120);
+		SetJustifyOn = reinterpret_cast<decltype(SetJustifyOn)>(fontBase - 0x90);
+		SetPropOn = reinterpret_cast<decltype(SetPropOn)>(fontBase + 0xB0);
+		SetFontStyle = reinterpret_cast<decltype(SetFontStyle)>(fontBase + 0xC0);
+		SetDropShadowPosition = reinterpret_cast<decltype(SetDropShadowPosition)>(fontBase + 0x180);
+		PrintString = reinterpret_cast<decltype(PrintString)>(fontBase - 0xDA0);
+	}
+	TXN_CATCH();
+}
+#endif
+
 namespace UIScales
 {
 	static float** Width_Internal(std::string_view pattern_string, ptrdiff_t offset = 0) try
@@ -3271,6 +3380,10 @@ void Patch_III_Common()
 	const bool bSSESupported = (cpuinfo[3] & (1 << 25)) != 0;
 
 	const bool bHasModelInfo = CVehicleModelInfo::HasGameBindings();
+
+#if ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT
+	SpeedrunVersionText::Install();
+#endif
 
 #if ENABLE_FIX_RADAR_TRACE_SCALING
 	// Scale the radar trace (blip) to resolution

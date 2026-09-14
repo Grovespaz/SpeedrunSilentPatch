@@ -434,6 +434,91 @@ ExternalRef				bDrawCrossHair(AddressByVersion<uint32_t**>(0x58E7BF + 2, {"83 3D
 // Technically part of CMenuManager, but we only need this boolean
 static ExternalRef		bIsFrontEndActive(AddressByVersion<bool**>(0x53E9AC + 1, {"80 3D ? ? ? ? 00 0F 85 ? ? ? ? B9", 2}));
 
+#if ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT
+namespace SpeedrunVersionText
+{
+	using DrawScreen = void (__thiscall*)(void* menuManager);
+	using DrawScreenBool = void (__thiscall*)(void* menuManager, bool active);
+
+	static auto SetScale = reinterpret_cast<void (*)(float, float)>(0x719380);
+	static auto SetColor = reinterpret_cast<void (*)(CRGBA)>(0x719430);
+	static auto SetFontStyle = reinterpret_cast<void (*)(short)>(0x719490);
+	static auto SetWrapX = reinterpret_cast<void (*)(float)>(0x7194D0);
+	static auto SetOutlinePosition = reinterpret_cast<void (*)(short)>(0x719590);
+	static auto SetProp = reinterpret_cast<void (*)(bool)>(0x7195B0);
+	static auto SetBackground = reinterpret_cast<void (*)(bool, bool)>(0x7195C0);
+	static auto SetAlignment = reinterpret_cast<void (*)(int)>(0x719610);
+	static auto PrintString = reinterpret_cast<void (*)(float, float, const char*)>(0x71A700);
+
+	template<size_t Index>
+	static DrawScreen orgDrawScreen;
+	template<size_t Index>
+	static DrawScreenBool orgDrawScreenBool;
+
+#define SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL(value) #value
+#define SPEEDRUN_VERSION_TEXT_STRINGIZE(value) SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL(value)
+	static char Text[] = "SpeedrunSilentPatch build " SPEEDRUN_VERSION_TEXT_STRINGIZE(SILENTPATCH_BUILD_ID);
+#undef SPEEDRUN_VERSION_TEXT_STRINGIZE
+#undef SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL
+
+	static bool ShouldDraw(const void* menuManager)
+	{
+#if SPEEDRUN_VERSION_TEXT_ALL_MENUS
+		UNREFERENCED_PARAMETER(menuManager);
+		return true;
+#else
+		return *reinterpret_cast<const bool*>(reinterpret_cast<const uint8_t*>(menuManager) + 0xE9);
+#endif
+	}
+
+	static void Draw(const void* menuManager)
+	{
+		if (!ShouldDraw(menuManager)) return;
+
+		const float widthScale = static_cast<float>(RsGlobal.Get().MaximumWidth) / 640.0f;
+		const float heightScale = static_cast<float>(RsGlobal.Get().MaximumHeight) / 448.0f;
+		const float x = 10.0f * widthScale;
+		const float y = static_cast<float>(RsGlobal.Get().MaximumHeight) - (18.0f * heightScale);
+
+		SetBackground(false, false);
+		SetProp(true);
+		SetAlignment(1); // ALIGN_LEFT
+		SetFontStyle(2);
+		SetWrapX(static_cast<float>(RsGlobal.Get().MaximumWidth));
+		SetOutlinePosition(1);
+		SetScale(0.35f * widthScale, 0.7f * heightScale);
+
+		SetColor(CRGBA(220, 220, 220, 220));
+		PrintString(x, y, Text);
+	}
+
+	template<size_t Index>
+	static void __fastcall DrawScreen_Hook(void* menuManager, void*)
+	{
+		orgDrawScreen<Index>(menuManager);
+		Draw(menuManager);
+	}
+
+	template<size_t Index>
+	static void __fastcall DrawScreenBool_Hook(void* menuManager, void*, bool active)
+	{
+		orgDrawScreenBool<Index>(menuManager, active);
+		Draw(menuManager);
+	}
+
+	static void Install()
+	{
+		using namespace Memory;
+
+		// Hook only the active page dispatch. DrawBackground has another font flush
+		// path, but this one is shared by standard, controller, and quit screens.
+		InterceptCall(0x57BA58, orgDrawScreenBool<0>, DrawScreenBool_Hook<0>);
+		InterceptCall(0x57BA5F, orgDrawScreen<0>, DrawScreen_Hook<0>);
+		InterceptCall(0x57BA66, orgDrawScreen<1>, DrawScreen_Hook<1>);
+	}
+}
+#endif
+
 DebugMenuAPI gDebugMenuAPI;
 static bool IgnoresWeaponPedsForPCFix();
 
@@ -7240,6 +7325,13 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 	wchar_t wcModulePath[MAX_PATH];
 	GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), wcModulePath, _countof(wcModulePath) - 3);
 	PathRenameExtensionW(wcModulePath, L".ini");
+
+#if ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT
+	if (EnsureBindings(RsGlobal))
+	{
+		SpeedrunVersionText::Install();
+	}
+#endif
 
 #if MEM_VALIDATORS
 	InstallMemValidator();

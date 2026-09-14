@@ -93,6 +93,102 @@ ExternalValue<int32_t> numModelInfos("81 FD ? ? ? ? 7C B7", 2);
 // Technically part of CMenuManager, but we only need this boolean
 static ExternalRef<bool> bIsFrontEndActive("80 3D ? ? ? ? 00 0F 85 ? ? ? ? B9 ? ? ? ? E8", 2);
 
+#if ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT
+namespace SpeedrunVersionText
+{
+	using DrawScreenBool = void (__thiscall*)(void* menuManager, bool active);
+
+	static void (*SetScale)(float x, float y);
+	static void (*SetColor)(const CRGBA& color);
+	static void (*SetBackgroundOff)();
+	static void (*SetJustifyOn)();
+	static void (*SetPropOn)();
+	static void (*SetFontStyle)(short style);
+	static void (*SetDropShadowPosition)(short position);
+	static void (*PrintString)(float x, float y, const wchar_t* text);
+	static void (*orgDrawFonts)();
+	static void* resolvedMenuManager;
+
+#define SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL(value) #value
+#define SPEEDRUN_VERSION_TEXT_STRINGIZE(value) SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL(value)
+#define SPEEDRUN_VERSION_TEXT_WIDEN_DETAIL(value) L##value
+#define SPEEDRUN_VERSION_TEXT_WIDEN(value) SPEEDRUN_VERSION_TEXT_WIDEN_DETAIL(value)
+	static wchar_t Text[] = L"SpeedrunSilentPatch build " SPEEDRUN_VERSION_TEXT_WIDEN(SPEEDRUN_VERSION_TEXT_STRINGIZE(SILENTPATCH_BUILD_ID));
+#undef SPEEDRUN_VERSION_TEXT_WIDEN
+#undef SPEEDRUN_VERSION_TEXT_WIDEN_DETAIL
+#undef SPEEDRUN_VERSION_TEXT_STRINGIZE
+#undef SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL
+
+	static bool ShouldDraw(const void* menuManager)
+	{
+#if SPEEDRUN_VERSION_TEXT_ALL_MENUS
+		UNREFERENCED_PARAMETER(menuManager);
+		return true;
+#else
+		return *reinterpret_cast<const bool*>(reinterpret_cast<const uint8_t*>(menuManager) + 0x6C);
+#endif
+	}
+
+	static void Draw(const void* menuManager)
+	{
+		if (!ShouldDraw(menuManager)) return;
+
+		const float widthScale = static_cast<float>(RsGlobal.Get().MaximumWidth) / 640.0f;
+		const float heightScale = static_cast<float>(RsGlobal.Get().MaximumHeight) / 448.0f;
+		const float x = 10.0f * widthScale;
+		const float y = static_cast<float>(RsGlobal.Get().MaximumHeight) - (18.0f * heightScale);
+
+		SetBackgroundOff();
+		SetPropOn();
+		SetJustifyOn();
+		SetFontStyle(2);
+		SetDropShadowPosition(0);
+		SetScale(0.35f * widthScale, 0.45f * heightScale);
+
+		SetColor(CRGBA(220, 220, 220, 220));
+		PrintString(x, y, Text);
+	}
+
+	static void DrawFonts_Hook()
+	{
+		// VC bounds-checks its queued font data and flushes it when necessary, so
+		// append the label to the game's batch and retain the one original flush.
+		Draw(resolvedMenuManager);
+		orgDrawFonts();
+	}
+
+	static void Install() try
+	{
+		using namespace Memory;
+		using namespace hook::txn;
+
+		// The active-page dispatch immediately preceding CFont::DrawFonts. Wildcard
+		// the equivalent MOV encodings used by the supported executable variants.
+		auto dispatch = get_pattern<uint8_t>("? ? 6A 01 E8 ? ? ? ? EB ? ? ? E8 ? ? ? ? EB ? ? ? E8 ? ? ? ? EB ? ? ? 6A 01 E8 ? ? ? ? E8 ? ? ? ? 6A 00 6A 06");
+		DrawScreenBool drawStandardMenus;
+		ReadCall(dispatch + 33, drawStandardMenus);
+
+		// bIsFrontEndActive is a field at +0x38 in CMenuManager in all supported VC
+		// executables. Resolving the object through that already-bound global avoids
+		// hooking any page renderer merely to capture its `this` pointer.
+		resolvedMenuManager = reinterpret_cast<uint8_t*>(bIsFrontEndActive.Address()) - 0x38;
+		InterceptCall(dispatch + 38, orgDrawFonts, DrawFonts_Hook);
+
+		// Resolve the stable CFont block from DrawStandardMenus' first font call.
+		ReadCall(reinterpret_cast<uintptr_t>(drawStandardMenus) + 0x1B, SetBackgroundOff);
+		const uintptr_t fontBase = reinterpret_cast<uintptr_t>(SetBackgroundOff);
+		SetScale = reinterpret_cast<decltype(SetScale)>(fontBase + 0x170);
+		SetColor = reinterpret_cast<decltype(SetColor)>(fontBase + 0xB0);
+		SetJustifyOn = reinterpret_cast<decltype(SetJustifyOn)>(fontBase + 0x80);
+		SetPropOn = reinterpret_cast<decltype(SetPropOn)>(fontBase - 0xB0);
+		SetFontStyle = reinterpret_cast<decltype(SetFontStyle)>(fontBase - 0x100);
+		SetDropShadowPosition = reinterpret_cast<decltype(SetDropShadowPosition)>(fontBase - 0x1C0);
+		PrintString = reinterpret_cast<decltype(PrintString)>(fontBase + 0xF10);
+	}
+	TXN_CATCH();
+}
+#endif
+
 namespace UIScales
 {
 	static float** Width_Internal(std::string_view pattern_string, ptrdiff_t offset = 0) try
@@ -3498,6 +3594,10 @@ void Patch_VC_Common()
 	const bool bSSESupported = (cpuinfo[3] & (1 << 25)) != 0;
 
 	const HMODULE hGameModule = GetModuleHandle(nullptr);
+
+#if ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT
+	SpeedrunVersionText::Install();
+#endif
 
 #if ENABLE_FIX_TEXT_SHADOW_SCALING
 	// Fix text shadows not scaling to resolution

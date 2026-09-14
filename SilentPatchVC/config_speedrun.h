@@ -4,6 +4,11 @@
 
 #define ENABLE_SUPPORT_DELAYED_PATCHING 1
 
+// Display the SpeedrunSilentPatch package build in the front-end menu render.
+#define ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT 1
+// 0: startup menus only, 1: startup and pause menus.
+#define SPEEDRUN_VERSION_TEXT_ALL_MENUS 1
+
 /*** OG SP fixes ***/
 // Fixed an issue where installing the game on `A:` or `B:` drive made the game ask for the CD.
 #define ENABLE_FIX_AB_DRIVE_CD_CHECK 1
