@@ -42,6 +42,7 @@ INCLUDED FIXES
 	- Copyrighted ambience music in the Pole Position Club and the Malibu Club as well as the Publicity Tour mission, can be replaced
 	  with default Vice City ambience to help prevent DMCA strikes on video and streaming platforms.
 	  Disabled by default, toggleable with setting in .ini file
+	- Fix an inconsistent crash and/or an error message on game start if the system has no disc drives.
 
 
 INSTALLATION

@@ -66,6 +66,7 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - CPU affinity mask (core pinning), toggleable in the INI and off by default. Needed in very rare cases.
 - Copyrighted ambience music in the Pole Position Club and the Malibu Club is replaced with default VC ambience, and Publicity Tour cutscene audio has music removed, to prevent DMCA-strikes on video and streaming platforms like Youtube and Twitch. Toggleable in ini with `ReplaceDMCAMusic`.
 - All startup movies in the Japanese executable of Vice City can be skipped with `SkipIntroSplashes` or the `/SkipIntroSplashes` command-line argument when using the DDraw component.
+- Fix an inconsistent crash and/or an error message on game start if the system has no disc drives.
 
 ## GTASA
 
