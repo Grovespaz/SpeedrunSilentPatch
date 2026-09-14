@@ -37,6 +37,188 @@ extern "C" HRESULT WINAPI DirectDrawCreateEx(GUID FAR *lpGUID, LPVOID *lplpDD, R
 ExternalRef<const char[]> ppUserFilesDir;
 static HINSTANCE hThisModule;
 
+#if ENABLE_FIX_VC_JP_NO_CD_BOOTSTRAP
+static decltype(LoadLibraryA)* pOrgLoadLibraryA;
+static decltype(GetProcAddress)* pOrgGetProcAddress;
+static HMODULE hSIntfNT;
+static bool useSIntfNTFallback;
+using GNOCD32_t = BOOL (WINAPI*)(DWORD* driveCount, DWORD* driveIndex);
+static GNOCD32_t pOrgGNOCD32;
+static FARPROC pGNOCD32Thunk;
+
+static BOOL WINAPI SIntfNT_Stub0() { return TRUE; }
+static BOOL WINAPI SIntfNT_Stub4(ULONG_PTR) { return TRUE; }
+static BOOL WINAPI SIntfNT_Stub8(ULONG_PTR, ULONG_PTR) { return TRUE; }
+static BOOL WINAPI SIntfNT_Stub12(ULONG_PTR, ULONG_PTR, ULONG_PTR) { return TRUE; }
+static BOOL WINAPI SIntfNT_Stub16(ULONG_PTR, ULONG_PTR, ULONG_PTR, ULONG_PTR) { return TRUE; }
+static BOOL WINAPI SIntfNT_Stub20(ULONG_PTR, ULONG_PTR, ULONG_PTR, ULONG_PTR, ULONG_PTR) { return TRUE; }
+static BOOL WINAPI SIntfNT_Stub24(ULONG_PTR, ULONG_PTR, ULONG_PTR, ULONG_PTR, ULONG_PTR, ULONG_PTR) { return TRUE; }
+
+static BOOL WINAPI TC32_Fallback(BYTE* key)
+{
+	if (key != nullptr) memset(key, 0, 9);
+	return TRUE;
+}
+
+static BOOL WINAPI GNOCD32_Fallback(DWORD* driveCount, DWORD* driveIndex)
+{
+	if (driveCount != nullptr) *driveCount = 0;
+	if (driveIndex != nullptr) *driveIndex = 0;
+	return TRUE;
+}
+
+static BOOL WINAPI GNOCD32_Hook(DWORD* driveCount, DWORD* driveIndex)
+{
+	const BOOL result = pOrgGNOCD32(driveCount, driveIndex);
+	// The JP no-CD executable does not use the selected drive afterwards, but its
+	// leftover bootstrap still treats an empty optical-drive list as fatal.
+	return result || (driveCount != nullptr && *driveCount == 0);
+}
+
+static FARPROC MakeGNOCD32Thunk(FARPROC target)
+{
+	if (pGNOCD32Thunk == nullptr)
+	{
+		BYTE* thunk = static_cast<BYTE*>(VirtualAlloc(nullptr, 0x100, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+		if (thunk == nullptr) return nullptr;
+		memset(thunk, 0x90, 0x100);
+		thunk[0] = 0xE9;
+		*reinterpret_cast<DWORD*>(thunk + 1) = static_cast<DWORD>(
+			reinterpret_cast<DWORD_PTR>(target) - reinterpret_cast<DWORD_PTR>(thunk + 5));
+		FlushInstructionCache(GetCurrentProcess(), thunk, 0x100);
+		pGNOCD32Thunk = reinterpret_cast<FARPROC>(thunk);
+	}
+	return pGNOCD32Thunk;
+}
+
+static HMODULE WINAPI LoadLibraryA_VCJPNoCD_Hook(LPCSTR fileName)
+{
+	HMODULE result = pOrgLoadLibraryA(fileName);
+	DWORD error = result != nullptr ? ERROR_SUCCESS : GetLastError();
+	if (fileName == nullptr || _stricmp(PathFindFileNameA(fileName), "sintfnt.dll") != 0)
+	{
+		if (result == nullptr) SetLastError(error);
+		return result;
+	}
+
+	// Re-entering this 2004 Petite-packed DLL after ERROR_DLL_INIT_FAILED deadlocks
+	// the process. The no-CD executable does not need its physical-disc interface,
+	// so provide ABI-compatible fallbacks instead of retrying the poisoned load.
+	if (result == nullptr && error == ERROR_DLL_INIT_FAILED)
+	{
+		if (GetModuleHandleEx(0, nullptr, &hSIntfNT))
+		{
+			useSIntfNTFallback = true;
+			SetLastError(ERROR_SUCCESS);
+			return hSIntfNT;
+		}
+	}
+
+	if (result != nullptr)
+	{
+		hSIntfNT = result;
+	}
+	else
+	{
+		SetLastError(error);
+	}
+	return result;
+}
+
+static FARPROC WINAPI GetProcAddress_VCJPNoCD_Hook(HMODULE module, LPCSTR procName)
+{
+	FARPROC result = pOrgGetProcAddress(module, procName);
+	if (module != hSIntfNT || reinterpret_cast<ULONG_PTR>(procName) > 0xFFFF) return result;
+
+	const ULONG_PTR ordinal = reinterpret_cast<ULONG_PTR>(procName);
+	if (useSIntfNTFallback)
+	{
+		switch (ordinal)
+		{
+		case 2: return reinterpret_cast<FARPROC>(SIntfNT_Stub4);
+		case 3:
+		case 4: return reinterpret_cast<FARPROC>(SIntfNT_Stub0);
+		case 5: return MakeGNOCD32Thunk(reinterpret_cast<FARPROC>(GNOCD32_Fallback));
+		case 6: return reinterpret_cast<FARPROC>(SIntfNT_Stub8);
+		case 7:
+		case 13:
+		case 15: return reinterpret_cast<FARPROC>(SIntfNT_Stub20);
+		case 8:
+		case 10:
+		case 11:
+		case 17:
+		case 18: return reinterpret_cast<FARPROC>(SIntfNT_Stub12);
+		case 9: return reinterpret_cast<FARPROC>(SIntfNT_Stub16);
+		case 12: return reinterpret_cast<FARPROC>(SIntfNT_Stub24);
+		case 14: return reinterpret_cast<FARPROC>(TC32_Fallback);
+		default: return result;
+		}
+	}
+
+	// SIntfNT ordinal 5 is GNOCD32. The executable writes into byte +0x79 of
+	// this function, so return a disposable thunk rather than writable patch code.
+	if (ordinal == 5 && result != nullptr)
+	{
+		pOrgGNOCD32 = reinterpret_cast<GNOCD32_t>(result);
+		return MakeGNOCD32Thunk(reinterpret_cast<FARPROC>(GNOCD32_Hook));
+	}
+	return result;
+}
+
+static bool PatchVCJPNoCDBootstrapIAT()
+{
+	HINSTANCE hInstance = GetModuleHandle(nullptr);
+	PIMAGE_NT_HEADERS ntHeader = reinterpret_cast<PIMAGE_NT_HEADERS>(
+		reinterpret_cast<DWORD_PTR>(hInstance) + reinterpret_cast<PIMAGE_DOS_HEADER>(hInstance)->e_lfanew);
+	PIMAGE_IMPORT_DESCRIPTOR imports = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(
+		reinterpret_cast<DWORD_PTR>(hInstance) +
+		ntHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+
+	for (; imports->Name != 0; ++imports)
+	{
+		if (_stricmp(reinterpret_cast<const char*>(reinterpret_cast<DWORD_PTR>(hInstance) + imports->Name),
+			"KERNEL32.DLL") != 0 || imports->OriginalFirstThunk == 0)
+		{
+			continue;
+		}
+
+		PIMAGE_IMPORT_BY_NAME* functions = reinterpret_cast<PIMAGE_IMPORT_BY_NAME*>(
+			reinterpret_cast<DWORD_PTR>(hInstance) + imports->OriginalFirstThunk);
+		bool patchedLoadLibrary = false;
+		bool patchedGetProcAddress = false;
+		for (ptrdiff_t i = 0; functions[i] != nullptr; ++i)
+		{
+			const char* name = reinterpret_cast<const char*>(
+				reinterpret_cast<DWORD_PTR>(hInstance) + functions[i]->Name);
+			if (strcmp(name, "LoadLibraryA") == 0)
+			{
+				DWORD oldProtect;
+				DWORD_PTR* address = &reinterpret_cast<DWORD_PTR*>(
+					reinterpret_cast<DWORD_PTR>(hInstance) + imports->FirstThunk)[i];
+				VirtualProtect(address, sizeof(*address), PAGE_EXECUTE_READWRITE, &oldProtect);
+				pOrgLoadLibraryA = reinterpret_cast<decltype(pOrgLoadLibraryA)>(*address);
+				*address = reinterpret_cast<DWORD_PTR>(LoadLibraryA_VCJPNoCD_Hook);
+				VirtualProtect(address, sizeof(*address), oldProtect, &oldProtect);
+				patchedLoadLibrary = true;
+			}
+			else if (strcmp(name, "GetProcAddress") == 0)
+			{
+				DWORD oldProtect;
+				DWORD_PTR* address = &reinterpret_cast<DWORD_PTR*>(
+					reinterpret_cast<DWORD_PTR>(hInstance) + imports->FirstThunk)[i];
+				VirtualProtect(address, sizeof(*address), PAGE_EXECUTE_READWRITE, &oldProtect);
+				pOrgGetProcAddress = reinterpret_cast<decltype(pOrgGetProcAddress)>(*address);
+				*address = reinterpret_cast<DWORD_PTR>(GetProcAddress_VCJPNoCD_Hook);
+				VirtualProtect(address, sizeof(*address), oldProtect, &oldProtect);
+				patchedGetProcAddress = true;
+			}
+		}
+		return patchedLoadLibrary && patchedGetProcAddress;
+	}
+	return false;
+}
+#endif
+
 #if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
 static bool IsIniOptionEnabled(const wchar_t* iniName, const wchar_t* optionName)
 {
@@ -289,6 +471,14 @@ static void ApplyDDrawHooks()
 {
 #if ENABLE_FIX_DEP_STARTUP_CRASH
 	rwcsegUnprotected = FixRwcseg_Header();
+#endif
+
+#if ENABLE_FIX_VC_JP_NO_CD_BOOTSTRAP
+	// Install before the protected executable enters its unpacked startup code.
+	if (*(DWORD*)Memory::DynBaseAddress(0x601048) == 0x5E5F5D60)
+	{
+		PatchVCJPNoCDBootstrapIAT();
+	}
 #endif
 
 	bool getStartupInfoHooked = PatchIAT();
