@@ -7309,8 +7309,15 @@ BOOL InjectDelayedPatches_10_Speedrun()
 #endif
 
 #if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
-		// Skip the EAX/NVIDIA intro splashes.
-		Patch<WORD>(AddressByRegion_10<DWORD>(0x748AA8), 0x3DEB);
+		wchar_t wcModulePath[MAX_PATH];
+		GetModuleFileNameW(reinterpret_cast<HMODULE>(&__ImageBase), wcModulePath, _countof(wcModulePath) - 3); // Minus max required space for extension
+		PathRenameExtensionW(wcModulePath, L".ini");
+
+		if (GetPrivateProfileIntW(L"SilentPatch", L"SkipIntroSplashes", 0, wcModulePath) != 0)
+		{
+			// Skip the EAX/NVIDIA intro splashes.
+			Patch<WORD>(AddressByRegion_10<DWORD>(0x748AA8), 0x3DEB);
+		}
 #endif
 
 		return FALSE;
