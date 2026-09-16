@@ -714,7 +714,7 @@ namespace
 		return modeIndex >= 0 && SetClientSizeFromVideoMode(static_cast<uint32_t>(modeIndex));
 	}
 
-	void ApplyWindowedState()
+	void ApplyWindowedState(UINT presentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE)
 	{
 		ClientSize = ClampClientSize(ClientSize);
 
@@ -735,7 +735,7 @@ namespace
 		params->BackBufferFormat = D3DFMT_A8R8G8B8;
 		params->SwapEffect = D3DSWAPEFFECT_DISCARD;
 		params->FullScreen_RefreshRateInHz = 0;
-		params->PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+		params->PresentationInterval = presentationInterval;
 
 		UpdateVideoMode();
 	}
@@ -807,8 +807,10 @@ namespace
 
 	HRESULT __stdcall ResetHook(IDirect3DDevice9* self, D3DPRESENT_PARAMETERS* params)
 	{
-		UNREFERENCED_PARAMETER(params);
-		ApplyWindowedState();
+		// RenderWare switches between synchronized and immediate presentation through Reset.
+		// Preserve that request so it does not retry the same Reset every frame.
+		const UINT presentationInterval = params->PresentationInterval;
+		ApplyWindowedState(presentationInterval);
 		ResizeWindowToClient();
 		return ResetOriginal(self, Ptr<D3DPRESENT_PARAMETERS>(0xC9C040));
 	}
