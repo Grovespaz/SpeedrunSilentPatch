@@ -77,6 +77,9 @@ CONFIGURATION
 						  Only enable this if you're sure you're not going to be doing a restart of the game during the timer. It's your own responsibility to turn this off if you do.
 						  It's your own responsibility to know the rules for the category you're running and to turn this off if you need to (re)start the game during the timed portion of your run.
 						  Can also be enabled for a single launch with the /SkipIntroSplashes command-line argument.
+	* CreateFullMemoryDump - After writing a crash log, also writes a full-process memory dump next to
+	  the game executable, replacing the previous dump. Can help with debugging crashes.
+	  Disabled by default. Dumps can be large.
 
 WINDOWED MODE
 

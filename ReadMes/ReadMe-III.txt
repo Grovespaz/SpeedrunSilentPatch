@@ -67,6 +67,9 @@ CONFIGURATION
 	* AlwaysOnTop - Keeps the game on top of all other windows when running in windowed mode.
 	* CpuAffinityMask - Allows you to set III's process affinity, pinning it to one core, for example.
 	  Set it to 0 to disable affinity forcing (the default).
+	* CreateFullMemoryDump - After writing a crash log, also writes a full-process memory dump next to
+	  the game executable, replacing the previous dump. Can help with debugging crashes.
+	  Disabled by default. Dumps can be large.
 
 WINDOWED MODE
 

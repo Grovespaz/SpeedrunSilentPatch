@@ -89,6 +89,9 @@ CONFIGURATION
 	  Don't touch if you have no clue what this does.
 	* SkipIntroSplashes - skips the EAX/NVIDIA intro splashes.
 	* ReplaceDMCAMusic - replaces copyrighted ambience music (including "beat" minigames) with neutral ambience.
+	* CreateFullMemoryDump - After writing a crash log, also writes a full-process memory dump next to
+	  the game executable, replacing the previous dump. Can help with debugging crashes.
+	  Disabled by default. Dumps can be large.
 	
 
 WINDOWED MODE

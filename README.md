@@ -41,6 +41,7 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
 - CPU affinity mask (core pinning), toggleable in the INI and off by default. Needed in very rare cases, for example when spamming replays while entering Portland crashes the game for you.
+- The game now write a crash log when it terminate through an unhandled exception. SSP can also write a full-process `.dmp` beside the executable. This is disabled by default because dumps can be large.
 
 ## GTAVC
 
@@ -67,6 +68,7 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Copyrighted ambience music in the Pole Position Club and the Malibu Club is replaced with default VC ambience, and Publicity Tour cutscene audio has music removed, to prevent DMCA-strikes on video and streaming platforms like Youtube and Twitch. Toggleable in ini with `ReplaceDMCAMusic`.
 - All startup movies in the Japanese executable of Vice City can be skipped with `SkipIntroSplashes` or the `/SkipIntroSplashes` command-line argument when using the DDraw component.
 - Fix an inconsistent crash and/or an error message on game start if the system has no disc drives.
+The game now write a crash log when it terminate through an unhandled exception. SSP can also write a full-process `.dmp` beside the executable. This is disabled by default because dumps can be large.
 
 ## GTASA
 
@@ -98,6 +100,7 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Windowed mode, toggleable in ini. Inspired by [III.VC.SA.WindowedMode](https://github.com/ThirteenAG/III.VC.SA.WindowedMode).
 - Copyrighted ambience music in the casinos, Pleasure Domes, Stadium, Lowrider challenge, beach party and the strip club can be replaced with default San Andreas ambience to help prevent DMCA strikes on video and streaming platforms. Disabled by default, toggleable with setting in .ini file.
 - Cpu affinity mask (aka core pinning) setting through ini. No longer needed, because SpeedrunSilentPatch patches the bug that caused crashes when running on more than one core. Off by default.
+The game now write a crash log when it terminate through an unhandled exception. SSP can also write a full-process `.dmp` beside the executable. This is disabled by default because dumps can be large.
 
 ## Nice to haves (would require additional scripting)
 

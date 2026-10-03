@@ -10,6 +10,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
 
 namespace CrashLogger
 {
@@ -19,22 +20,28 @@ namespace CrashLogger
 		const char* const GAME_NAME = "SilentPatchIII";
 #if defined(SILENTPATCH_SPEEDRUN)
 		const char* const LOG_FILE_NAME = "SpeedrunSilentPatchIII_crash.log";
+		const char* const DUMP_FILE_NAME = "SpeedrunSilentPatchIII_crash.dmp";
 #else
 		const char* const LOG_FILE_NAME = "SilentPatchIII_crash.log";
+		const char* const DUMP_FILE_NAME = "SilentPatchIII_crash.dmp";
 #endif
 #elif defined(_GTA_VC)
 		const char* const GAME_NAME = "SilentPatchVC";
 #if defined(SILENTPATCH_SPEEDRUN)
 		const char* const LOG_FILE_NAME = "SpeedrunSilentPatchVC_crash.log";
+		const char* const DUMP_FILE_NAME = "SpeedrunSilentPatchVC_crash.dmp";
 #else
 		const char* const LOG_FILE_NAME = "SilentPatchVC_crash.log";
+		const char* const DUMP_FILE_NAME = "SilentPatchVC_crash.dmp";
 #endif
 #elif defined(_GTA_SA)
 		const char* const GAME_NAME = "SilentPatchSA";
 #if defined(SILENTPATCH_SPEEDRUN)
 		const char* const LOG_FILE_NAME = "SpeedrunSilentPatchSA_crash.log";
+		const char* const DUMP_FILE_NAME = "SpeedrunSilentPatchSA_crash.dmp";
 #else
 		const char* const LOG_FILE_NAME = "SilentPatchSA_crash.log";
+		const char* const DUMP_FILE_NAME = "SilentPatchSA_crash.dmp";
 #endif
 #else
 #error CrashLogger needs a GTA target define.
@@ -43,6 +50,7 @@ namespace CrashLogger
 		HINSTANCE g_module = nullptr;
 		LPTOP_LEVEL_EXCEPTION_FILTER g_previousFilter = nullptr;
 		volatile LONG g_loggedCrash = 0;
+		volatile LONG g_createFullMemoryDump = 0;
 
 #if defined(_GTA_SA)
 		volatile LONG g_saGameVersion = -1;
@@ -122,7 +130,7 @@ namespace CrashLogger
 			}
 		}
 
-		void BuildLogPath(char* path, size_t pathSize)
+		void BuildOutputPath(const char* fileName, char* path, size_t pathSize)
 		{
 			path[0] = '\0';
 
@@ -130,7 +138,7 @@ namespace CrashLogger
 			const DWORD length = GetModuleFileNameA(GetModuleHandle(nullptr), gamePath, static_cast<DWORD>(_countof(gamePath)));
 			if (length == 0 || length >= _countof(gamePath))
 			{
-				strcpy_s(path, pathSize, LOG_FILE_NAME);
+				strcpy_s(path, pathSize, fileName);
 				return;
 			}
 
@@ -145,12 +153,48 @@ namespace CrashLogger
 			{
 				*(slash + 1) = '\0';
 				strcpy_s(path, pathSize, gamePath);
-				strcat_s(path, pathSize, LOG_FILE_NAME);
+				strcat_s(path, pathSize, fileName);
 			}
 			else
 			{
-				strcpy_s(path, pathSize, LOG_FILE_NAME);
+				strcpy_s(path, pathSize, fileName);
 			}
+		}
+
+		bool BuildIniPath(HINSTANCE module, wchar_t* path, size_t pathSize)
+		{
+			const DWORD length = GetModuleFileNameW(module, path, static_cast<DWORD>(pathSize));
+			if (length == 0 || length >= pathSize)
+			{
+				return false;
+			}
+
+			wchar_t* slash = std::wcsrchr(path, L'\\');
+			wchar_t* forwardSlash = std::wcsrchr(path, L'/');
+			if (forwardSlash != nullptr && (slash == nullptr || forwardSlash > slash))
+			{
+				slash = forwardSlash;
+			}
+
+			wchar_t* extension = std::wcsrchr(path, L'.');
+			if (extension == nullptr || (slash != nullptr && extension < slash))
+			{
+				if (length + 4 >= pathSize)
+				{
+					return false;
+				}
+				extension = path + length;
+			}
+
+			wcscpy_s(extension, pathSize - static_cast<size_t>(extension - path), L".ini");
+			return true;
+		}
+
+		bool ReadCreateFullMemoryDumpOption(HINSTANCE module)
+		{
+			wchar_t iniPath[MAX_PATH];
+			return BuildIniPath(module, iniPath, _countof(iniPath)) &&
+				GetPrivateProfileIntW(L"SilentPatch", L"CreateFullMemoryDump", 0, iniPath) != 0;
 		}
 
 		void WriteModuleForAddress(LogFile& log, DWORD64 address)
@@ -702,6 +746,32 @@ namespace CrashLogger
 			}
 		};
 
+		struct MiniDumpApi
+		{
+			HMODULE module = nullptr;
+			decltype(&MiniDumpWriteDump) miniDumpWriteDump = nullptr;
+
+			~MiniDumpApi()
+			{
+				if (module != nullptr)
+				{
+					FreeLibrary(module);
+				}
+			}
+
+			bool Load()
+			{
+				module = LoadLibraryA("dbghelp.dll");
+				if (module == nullptr)
+				{
+					return false;
+				}
+
+				miniDumpWriteDump = reinterpret_cast<decltype(miniDumpWriteDump)>(GetProcAddress(module, "MiniDumpWriteDump"));
+				return miniDumpWriteDump != nullptr;
+			}
+		};
+
 		void WriteStackTrace(LogFile& log, const CONTEXT* context)
 		{
 #if defined(_M_IX86)
@@ -814,15 +884,43 @@ namespace CrashLogger
 			CloseHandle(snapshot);
 		}
 
-		void WriteCrashLog(EXCEPTION_POINTERS* exceptionInfo)
+		void WriteFullMemoryDump(EXCEPTION_POINTERS* exceptionInfo)
 		{
-			if (InterlockedCompareExchange(&g_loggedCrash, 1, 0) != 0)
+			MiniDumpApi dbgHelp;
+			if (!dbgHelp.Load())
 			{
 				return;
 			}
 
+			char dumpPath[MAX_PATH];
+			BuildOutputPath(DUMP_FILE_NAME, dumpPath, _countof(dumpPath));
+
+			const HANDLE dumpFile = CreateFileA(dumpPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
+				FILE_ATTRIBUTE_NORMAL, nullptr);
+			if (dumpFile == INVALID_HANDLE_VALUE)
+			{
+				return;
+			}
+
+			MINIDUMP_EXCEPTION_INFORMATION exceptionInformation = {};
+			exceptionInformation.ThreadId = GetCurrentThreadId();
+			exceptionInformation.ExceptionPointers = exceptionInfo;
+			exceptionInformation.ClientPointers = FALSE;
+
+			const BOOL succeeded = dbgHelp.miniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dumpFile,
+				MiniDumpWithFullMemory, &exceptionInformation, nullptr, nullptr);
+			CloseHandle(dumpFile);
+
+			if (succeeded == FALSE)
+			{
+				DeleteFileA(dumpPath);
+			}
+		}
+
+		void WriteCrashLog(EXCEPTION_POINTERS* exceptionInfo)
+		{
 			char logPath[MAX_PATH];
-			BuildLogPath(logPath, _countof(logPath));
+			BuildOutputPath(LOG_FILE_NAME, logPath, _countof(logPath));
 
 			LogFile log(logPath);
 			if (!log.IsOpen())
@@ -857,9 +955,23 @@ namespace CrashLogger
 			log.Write("============================================================\r\n");
 		}
 
+		void WriteCrashReport(EXCEPTION_POINTERS* exceptionInfo)
+		{
+			if (InterlockedCompareExchange(&g_loggedCrash, 1, 0) != 0)
+			{
+				return;
+			}
+
+			WriteCrashLog(exceptionInfo);
+			if (InterlockedCompareExchange(&g_createFullMemoryDump, 0, 0) != 0)
+			{
+				WriteFullMemoryDump(exceptionInfo);
+			}
+		}
+
 		LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo)
 		{
-			WriteCrashLog(exceptionInfo);
+			WriteCrashReport(exceptionInfo);
 
 			if (g_previousFilter != nullptr && g_previousFilter != UnhandledExceptionFilter)
 			{
@@ -877,6 +989,8 @@ namespace CrashLogger
 	void Install(HINSTANCE module)
 	{
 		g_module = module;
+		InterlockedExchange(&g_loggedCrash, 0);
+		InterlockedExchange(&g_createFullMemoryDump, ReadCreateFullMemoryDumpOption(module) ? 1 : 0);
 #if defined(_GTA_SA)
 		InterlockedExchange(&g_saGameVersion, -1);
 #endif
@@ -892,6 +1006,7 @@ namespace CrashLogger
 
 	void Uninstall()
 	{
+		InterlockedExchange(&g_createFullMemoryDump, 0);
 #if defined(_GTA_SA)
 		InterlockedExchange(&g_saGameVersion, -1);
 #endif
