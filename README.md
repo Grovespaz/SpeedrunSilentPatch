@@ -3,11 +3,13 @@
 ### If you're not a speedrunner, you probably don't want this patch. Go here instead:
 https://github.com/CookiePLMonster/SilentPatch
 
-(WIP) This is where you will find the GTA Community's version of [SilentPatch](https://cookieplmonster.github.io/mods/gta/)! 
+
+### If you *are* a speedrunner:
+This is where you will find the GTA Community's version of [SilentPatch](https://cookieplmonster.github.io/mods/gta/)! 
 
 If you're not familiar with [SilentPatch](https://cookieplmonster.github.io/mods/gta/), basically it fixes a bunch of issues with the 3D GTA Trilogy. This is great for casual players, but it fixes too much to be viable for speedrunning. Some fixes make SP straight-up faster than vanilla, meaning everyone would need to use it to be competitive.
 
-The idea of SpeedrunSilentPatch (SSP) is to create a fork of [SilentPatch](https://cookieplmonster.github.io/mods/gta/) with three main objectives:
+The idea of SpeedrunSilentPatch (SSP) is to maintain a fork of [SilentPatch](https://cookieplmonster.github.io/mods/gta/) with three main objectives:
 
 - Keep the games playable on modern hardware
 - Improving speedrun QoL (eg fixing NG+ stuff)
@@ -20,6 +22,13 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 * GTA 3 - 1.0 and 1.1 (Excluding Steam and RGL versions, use a regular 1.1 exe instead)
 * GTA VC - Japanese version (1.0 and 1.1 should also work, but aren't tested)
 * GTA SA - 1.0 *only* (but the homie recruiting is fixed like it is in 1.01)
+
+# How to use
+
+1. Download the latest release for your game from [the release page](https://github.com/Grovespaz/SpeedrunSilentPatch/releases).
+2. Unpack the zip to your game directory. For San Andreas, overwrite existing files.
+3. (optionally) edit the included `SpeedrunSilentPatchXX.ini` to enable settings like Windowed Mode, DMCA music replacement, etc.
+4. Start the game!
 
 # SpeedrunSilentPatch Fixes
 
@@ -101,11 +110,6 @@ Custom SpeedrunSilentPatch fixes not in original SilentPatch:
 - Copyrighted ambience music in the casinos, Pleasure Domes, Stadium, Lowrider challenge, beach party and the strip club can be replaced with default San Andreas ambience to help prevent DMCA strikes on video and streaming platforms. Disabled by default, toggleable with setting in .ini file.
 - Cpu affinity mask (aka core pinning) setting through ini. No longer needed, because SpeedrunSilentPatch patches the bug that caused crashes when running on more than one core. Off by default.
 The game now write a crash log when it terminate through an unhandled exception. SSP can also write a full-process `.dmp` beside the executable. This is disabled by default because dumps can be large.
-
-## Nice to haves (would require additional scripting)
-
-- Some sort of anticheat/antitamper
-- Fix default options (steer with mouse etc)
 
 ## Thanks / Credits
 * Silent, for creating SilentPatch, the project this project is based on.
