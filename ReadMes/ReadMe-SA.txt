@@ -47,8 +47,8 @@ INCLUDED FIXES
 	SpeedrunSilentPatch-only fixes:
 	- WASD cheat prevention is available. By default, cheats only work while Shift is held.
 	- Windowed mode & Borderless is available, inspired by III.VC.SA.WindowedMode.
-	- Copyrighted ambience music in the casinos, Pleasure Domes, Stadium, Lowrider challenge, beach party and the strip club
-	  can be replaced with default San Andreas ambience to help prevent DMCA strikes on video and streaming platforms.
+	- Copyrighted ambience music in  St. Mark's Bistro, the casinos, Pleasure Domes, Stadium, Lowrider challenge, beach party
+	  and the strip club can be replaced with default San Andreas ambience to help prevent DMCA strikes on video and streaming platforms.
 	  Disabled by default, toggleable with setting in .ini file.
 	- CPU affinity setting through ini. This is no longer needed since the leaderboard mods have decided to allow the root-cause fix
 	  (streaming deadlock described above).

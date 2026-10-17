@@ -7380,7 +7380,7 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 #endif
 
 #if ENABLE_ENHANCEMENT_REPLACE_DMCA_AMBIENCE
-	// Replace casino, club, stadium, and strip club ambience with neutral ambience,
+	// Replace bistro, casino, club, stadium, and strip club ambience with neutral ambience,
 	// and mute DMCA-sensitive beat tracks while preserving their timing data.
 	const int replaceDMCAAudio = GetPrivateProfileIntW(
 		L"SilentPatch", L"ReplaceDMCAMusicWithAmbience",
@@ -7391,6 +7391,7 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 	{
 		// Patch the immediate values in mov edi, imm32 instructions
 		// inside UpdateAmbienceTrackAndVolume:
+		//   Zone 4, St. Mark's Bistro violin music (143)  -> ambience track 154
 		//   Zone 5, Beach Party background song (140)     -> ambience track 154
 		//   Zone 13, Lowrider challenge song (157)        -> ambience track 154
 		//   Zone 17, Casino bkgd medley (146)             -> ambience track 154
@@ -7398,6 +7399,7 @@ void Patch_SA_10_Speedrun(HINSTANCE hInstance)
 		//   Zone 34, Pleasure Domes background music (162)-> ambience track 154
 		//   Zone 41, Stadium event bkgd medley (169)      -> ambience track 154
 		//   Zone 66, Strip Club background melody (170)   -> ambience track 154
+		Patch<int32_t>(0x4D7063, 154);
 		Patch<int32_t>(0x4D6FB1, 154);
 		Patch<int32_t>(0x4D6FC3, 154);
 		Patch<int32_t>(0x4D70C6, 154);
