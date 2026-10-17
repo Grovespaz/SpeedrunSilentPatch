@@ -189,22 +189,23 @@ namespace SpeedrunVersionText
 		// transition-page call is intentionally left untouched so the text is queued once.
 		auto dispatch = get_pattern<uint8_t>("89 D9 E8 ? ? ? ? EB 12 89 D9 E8 ? ? ? ? EB 09 ? ? 89 D9 E8 ? ? ? ? E8 ? ? ? ?");
 
+		// Resolve each CFont entry point from an existing call.
+		auto fontSetup = get_pattern<uint8_t>("C6 44 24 ? 01 E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ?");
+		ReadCall(fontSetup + 5, SetBackgroundOff);
+		ReadCall(fontSetup + 10, SetPropOn);
+		ReadCall(fontSetup + 20, SetJustifyOn);
+
+		auto fontColor = get_pattern<uint8_t>("8D 44 24 0C 50 E8 ? ? ? ? 59 6A 00 E8 ? ? ? ? 83 3D ? ? ? ? 00 59");
+		ReadCall(fontColor + 5, SetColor);
+		ReadCall(fontColor + 13, SetFontStyle);
+		ReadCall(get_pattern("FF 35 ? ? ? ? FF 35 ? ? ? ? E8 ? ? ? ? 59 59 E8 ? ? ? ? 68 F8 2A 00 00", 12), SetScale);
+		ReadCall(get_pattern("6A 00 E8 ? ? ? ? 66 C7 05 ? ? ? ? 00 00 59 C3", 2), SetDropShadowPosition);
+		ReadCall(get_pattern("D9 1C 24 E8 ? ? ? ? 83 C4 0C 83 C4 28 5D 5B C3", 3), PrintString);
+
 		InterceptCall(dispatch + 22, orgDrawScreen<2>, DrawScreen_Hook<2>);
 		InterceptCall(dispatch + 2, orgDrawScreen<0>, DrawScreen_Hook<0>);
 		InterceptCall(dispatch + 11, orgDrawScreen<1>, DrawScreen_Hook<1>);
 		InterceptCall(dispatch + 27, orgDrawFonts, DrawFonts_Hook);
-
-		// All CFont entry points are in one stable block. Resolve that block through
-		// Draw's first SetBackgroundOff call so we don't rely on static addresses.
-		ReadCall(reinterpret_cast<uintptr_t>(orgDrawScreen<2>) + 0x11, SetBackgroundOff);
-		const uintptr_t fontBase = reinterpret_cast<uintptr_t>(SetBackgroundOff);
-		SetScale = reinterpret_cast<decltype(SetScale)>(fontBase - 0x170);
-		SetColor = reinterpret_cast<decltype(SetColor)>(fontBase - 0x120);
-		SetJustifyOn = reinterpret_cast<decltype(SetJustifyOn)>(fontBase - 0x90);
-		SetPropOn = reinterpret_cast<decltype(SetPropOn)>(fontBase + 0xB0);
-		SetFontStyle = reinterpret_cast<decltype(SetFontStyle)>(fontBase + 0xC0);
-		SetDropShadowPosition = reinterpret_cast<decltype(SetDropShadowPosition)>(fontBase + 0x180);
-		PrintString = reinterpret_cast<decltype(PrintString)>(fontBase - 0xDA0);
 	}
 	TXN_CATCH();
 }

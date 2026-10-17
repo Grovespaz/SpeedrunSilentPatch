@@ -440,15 +440,15 @@ namespace SpeedrunVersionText
 	using DrawScreen = void (__thiscall*)(void* menuManager);
 	using DrawScreenBool = void (__thiscall*)(void* menuManager, bool active);
 
-	static auto SetScale = reinterpret_cast<void (*)(float, float)>(0x719380);
-	static auto SetColor = reinterpret_cast<void (*)(CRGBA)>(0x719430);
-	static auto SetFontStyle = reinterpret_cast<void (*)(short)>(0x719490);
-	static auto SetWrapX = reinterpret_cast<void (*)(float)>(0x7194D0);
-	static auto SetOutlinePosition = reinterpret_cast<void (*)(short)>(0x719590);
-	static auto SetProp = reinterpret_cast<void (*)(bool)>(0x7195B0);
-	static auto SetBackground = reinterpret_cast<void (*)(bool, bool)>(0x7195C0);
-	static auto SetAlignment = reinterpret_cast<void (*)(int)>(0x719610);
-	static auto PrintString = reinterpret_cast<void (*)(float, float, const char*)>(0x71A700);
+	static void (*SetScale)(float x, float y);
+	static void (*SetColor)(CRGBA color);
+	static void (*SetFontStyle)(short style);
+	static void (*SetWrapX)(float wrap);
+	static void (*SetOutlinePosition)(short position);
+	static void (*SetProp)(bool proportional);
+	static void (*SetBackground)(bool enabled, bool onlyText);
+	static void (*SetAlignment)(int alignment);
+	static void (*PrintString)(float x, float y, const char* text);
 
 	template<size_t Index>
 	static DrawScreen orgDrawScreen;
@@ -506,16 +506,33 @@ namespace SpeedrunVersionText
 		Draw(menuManager);
 	}
 
-	static void Install()
+	static void Install() try
 	{
 		using namespace Memory;
+		using namespace hook::txn;
 
-		// Hook only the active page dispatch. DrawBackground has another font flush
-		// path, but this one is shared by standard, controller, and quit screens.
-		InterceptCall(0x57BA58, orgDrawScreenBool<0>, DrawScreenBool_Hook<0>);
-		InterceptCall(0x57BA5F, orgDrawScreen<0>, DrawScreen_Hook<0>);
-		InterceptCall(0x57BA66, orgDrawScreen<1>, DrawScreen_Hook<1>);
+		// The active-page dispatch shared by standard, controller, and quit screens.
+		auto dispatch = get_pattern<uint8_t>("3C 26 BF 01 00 00 00 8B CE 74 13 3C 2B 74 08 57 E8 ? ? ? ? EB 0C E8 ? ? ? ? EB 05 E8 ? ? ? ? 8A 8E");
+
+		// Resolve the CFont entry points from calls in DrawStandardMenus.
+		auto fontSetup = get_pattern<uint8_t>("C6 44 24 ? 01 E8 ? ? ? ? 6A 01 E8 ? ? ? ? 6A 01 E8 ? ? ? ? A1 ? ? ? ? 83 C0 F6");
+		ReadCall(fontSetup + 5, SetBackground);
+		ReadCall(fontSetup + 12, SetProp);
+		ReadCall(fontSetup + 19, SetAlignment);
+		ReadCall(get_pattern("83 C0 F6 89 44 24 ? DB 44 24 ? 83 C4 0C D9 1C 24 E8 ? ? ? ? 68 00 00 20 41", 17), SetWrapX);
+		ReadCall(get_pattern("6A 01 E8 ? ? ? ? 6A 00 E8 ? ? ? ? A1 ? ? ? ? 83 C4 08 3B C6", 9), SetFontStyle);
+
+		auto headingScale = get_pattern<uint8_t>("8B 54 24 ? 8B 44 24 ? 52 50 E8 ? ? ? ? 6A 01 E8 ? ? ? ? 83 C4 0C 6A 03");
+		ReadCall(headingScale + 10, SetScale);
+		ReadCall(headingScale + 17, SetOutlinePosition);
+		ReadCall(get_pattern("6A 03 8D 4C 24 ? 51 B9 ? ? ? ? E8 ? ? ? ? 8B 10 52 E8 ? ? ? ? 83 C4 04 6A 05", 20), SetColor);
+		ReadCall(get_pattern("8B 4C 24 ? 50 8B 44 24 ? 50 51 E8 ? ? ? ? 83 C4 0C 0F BE 95 5D 01 00 00", 11), PrintString);
+
+		InterceptCall(dispatch + 16, orgDrawScreenBool<0>, DrawScreenBool_Hook<0>);
+		InterceptCall(dispatch + 23, orgDrawScreen<0>, DrawScreen_Hook<0>);
+		InterceptCall(dispatch + 30, orgDrawScreen<1>, DrawScreen_Hook<1>);
 	}
+	TXN_CATCH();
 }
 #endif
 

@@ -96,8 +96,6 @@ static ExternalRef<bool> bIsFrontEndActive("80 3D ? ? ? ? 00 0F 85 ? ? ? ? B9 ? 
 #if ENABLE_ENHANCEMENT_SPEEDRUN_VERSION_TEXT
 namespace SpeedrunVersionText
 {
-	using DrawScreenBool = void (__thiscall*)(void* menuManager, bool active);
-
 	static void (*SetScale)(float x, float y);
 	static void (*SetColor)(const CRGBA& color);
 	static void (*SetBackgroundOff)();
@@ -165,25 +163,28 @@ namespace SpeedrunVersionText
 		// The active-page dispatch immediately preceding CFont::DrawFonts. Wildcard
 		// the equivalent MOV encodings used by the supported executable variants.
 		auto dispatch = get_pattern<uint8_t>("? ? 6A 01 E8 ? ? ? ? EB ? ? ? E8 ? ? ? ? EB ? ? ? E8 ? ? ? ? EB ? ? ? 6A 01 E8 ? ? ? ? E8 ? ? ? ? 6A 00 6A 06");
-		DrawScreenBool drawStandardMenus;
-		ReadCall(dispatch + 33, drawStandardMenus);
+
+		// Resolve the font functions from existing calls in DrawStandardMenus.
+		// Their offsets relative to SetBackgroundOff differ between 1.0 and JP.
+		auto fontSetup = get_pattern<uint8_t>("C6 44 24 ? 01 E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? A1 ? ? ? ? 83 C0 F6");
+		ReadCall(fontSetup + 5, SetBackgroundOff);
+		ReadCall(fontSetup + 10, SetPropOn);
+		ReadCall(fontSetup + 20, SetJustifyOn);
+
+		auto headingScale = get_pattern<uint8_t>("DE D9 E8 ? ? ? ? 59 59 6A 00 E8 ? ? ? ? 8B 85 08 01 00 00");
+		ReadCall(headingScale + 2, SetScale);
+		ReadCall(headingScale + 11, SetDropShadowPosition);
+		ReadCall(get_pattern("FF 35 ? ? ? ? E8 ? ? ? ? 59 6A ? E8 ? ? ? ? A1 ? ? ? ? 59 3D 80 02 00 00 D9 EE D9 EE", 14), SetFontStyle);
+		ReadCall(get_pattern("8B 85 08 01 00 00 59 3D FF 00 00 00 7C 05 B8 FF 00 00 00 8D 8C 24 ? ? ? ? 50 6A 1E 6A 1E 6A 1E E8 ? ? ? ? 8D 84 24 ? ? ? ? 50 E8", 46), SetColor);
+		ReadCall(get_pattern("DB 05 ? ? ? ? 50 FF 74 24 ? D8 64 24 ? 50 D9 1C 24 E8 ? ? ? ? 8B 85 08 01 00 00 83 C4 0C 3D FF 00 00 00", 19), PrintString);
 
 		// bIsFrontEndActive is a field at +0x38 in CMenuManager in all supported VC
 		// executables. Resolving the object through that already-bound global avoids
 		// hooking any page renderer merely to capture its `this` pointer.
 		resolvedMenuManager = reinterpret_cast<uint8_t*>(bIsFrontEndActive.Address()) - 0x38;
-		InterceptCall(dispatch + 38, orgDrawFonts, DrawFonts_Hook);
 
-		// Resolve the stable CFont block from DrawStandardMenus' first font call.
-		ReadCall(reinterpret_cast<uintptr_t>(drawStandardMenus) + 0x1B, SetBackgroundOff);
-		const uintptr_t fontBase = reinterpret_cast<uintptr_t>(SetBackgroundOff);
-		SetScale = reinterpret_cast<decltype(SetScale)>(fontBase + 0x170);
-		SetColor = reinterpret_cast<decltype(SetColor)>(fontBase + 0xB0);
-		SetJustifyOn = reinterpret_cast<decltype(SetJustifyOn)>(fontBase + 0x80);
-		SetPropOn = reinterpret_cast<decltype(SetPropOn)>(fontBase - 0xB0);
-		SetFontStyle = reinterpret_cast<decltype(SetFontStyle)>(fontBase - 0x100);
-		SetDropShadowPosition = reinterpret_cast<decltype(SetDropShadowPosition)>(fontBase - 0x1C0);
-		PrintString = reinterpret_cast<decltype(PrintString)>(fontBase + 0xF10);
+		// Install only after every binding succeeds.
+		InterceptCall(dispatch + 38, orgDrawFonts, DrawFonts_Hook);
 	}
 	TXN_CATCH();
 }
