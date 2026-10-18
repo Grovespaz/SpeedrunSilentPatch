@@ -313,6 +313,23 @@ static bool HasCommandLineArgument(const wchar_t* argument)
 	LocalFree(arguments);
 	return found;
 }
+
+static void SkipIntroSplashesVC(uintptr_t firstMovieState, uintptr_t initOnceAfterMovieCleanup)
+{
+#if defined(SILENTPATCH_SPEEDRUN)
+	constexpr const wchar_t* iniName = L"SpeedrunSilentPatchVC.ini";
+#else
+	constexpr const wchar_t* iniName = L"SilentPatchVC.ini";
+#endif
+	if (IsIniOptionEnabled(iniName, L"SkipIntroSplashes") ||
+			HasCommandLineArgument(L"/SkipIntroSplashes"))
+	{
+		// Redirect the first movie's switch entry to GS_INIT_ONCE, past its movie/COM
+		// cleanup. JP has warning and Capcom states in addition to the Rockstar logo and GTA titles, so its GS_INIT_ONCE is state 9, not 5.
+		Memory::DynBase::Patch<uintptr_t>(firstMovieState,
+			Memory::DynBaseAddress<uintptr_t>(initOnceAfterMovieCleanup));
+	}
+}
 #endif
 
 void InjectHooks()
@@ -372,6 +389,10 @@ void InjectHooks()
 		affinityIniName = VC_INI_NAME;
 #endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x6022AA));
+#if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
+		// The original and NoCD 1.0 executables share this switch table and code.
+		SkipIntroSplashesVC(0x6D68E8, 0x600318);
+#endif
 		INSTALL_WINDOWED_MODE(VC10);
 		Common::Patches::DDraw_VC_10( width, height, aNoDesktopMode );
 	}
@@ -382,6 +403,9 @@ void InjectHooks()
 		affinityIniName = VC_INI_NAME;
 #endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x60228A));
+#if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
+		SkipIntroSplashesVC(0x6D68BC, 0x600338);
+#endif
 		INSTALL_WINDOWED_MODE(VC11);
 		Common::Patches::DDraw_VC_11( width, height, aNoDesktopMode );
 	}
@@ -392,6 +416,9 @@ void InjectHooks()
 		affinityIniName = VC_INI_NAME;
 #endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x601ECA));
+#if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
+		SkipIntroSplashesVC(0x6D58B4, 0x5FFF78);
+#endif
 		Common::Patches::DDraw_VC_Steam( width, height, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x601048) == 0x5E5F5D60)
@@ -403,18 +430,7 @@ void InjectHooks()
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x60204A));
 
 #if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
-#if defined(SILENTPATCH_SPEEDRUN)
-		constexpr const wchar_t* iniName = L"SpeedrunSilentPatchVC.ini";
-#else
-		constexpr const wchar_t* iniName = L"SilentPatchVC.ini";
-#endif
-		if (IsIniOptionEnabled(iniName, L"SkipIntroSplashes") ||
-				HasCommandLineArgument(L"/SkipIntroSplashes"))
-		{
-			// Skip the warning, Rockstar, Capcom, and GTA title movies. Redirect the first
-			// movie state to GS_INIT_ONCE after its movie/COM cleanup, since no clip was opened.
-			Memory::DynBase::Patch<uintptr_t>(0x6D3BF4, Memory::DynBaseAddress<uintptr_t>(0x600108));
-		}
+		SkipIntroSplashesVC(0x6D3BF4, 0x600108);
 #endif
 
 		INSTALL_WINDOWED_MODE(VCJP);
