@@ -82,7 +82,7 @@ WINDOWED MODE
 SUPPORTED GAME VERSIONS
 
 	* GTA III 1.0 (all versions)
-	* GTA III 1.1 (excluding Steam and Rockstar Games Launcher versions, use a regular 1.1 exe instead)
+	* GTA III 1.1 (retail and Steam versions, Rockstar Games Launcher version is not supported)
 
 
 CREDITS

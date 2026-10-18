@@ -19,7 +19,7 @@ Importantly this mod will **never** give a speed advantage. This means it is com
 
 # Supported versions
 
-* GTA 3 - 1.0 and 1.1 (Excluding Steam and RGL versions, use a regular 1.1 exe instead)
+* GTA 3 - 1.0, retail 1.1 and legacy Steam 1.1 (Rockstar Games Launcher versions are not supported)
 * GTA VC - Japanese version (1.0 and 1.1 should also work, but aren't tested)
 * GTA SA - 1.0 *only* (but the homie recruiting is fixed like it is in 1.01)
 

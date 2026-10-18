@@ -16,12 +16,6 @@
 
 namespace
 {
-	enum class Game
-	{
-		III,
-		VC,
-	};
-
 	enum class WindowedMode
 	{
 		Off,
@@ -76,27 +70,17 @@ namespace
 
 	struct Addresses
 	{
-		Game game;
 		const wchar_t* iniName;
 		const char* windowStateIniName;
 		uintptr_t rsGlobal;
-		uintptr_t d3dDevice;
 		uintptr_t d3dPresentParams;
 		uintptr_t rwVideoModes;
 		uintptr_t RwEngineGetNumVideoModes;
 		uintptr_t RwEngineGetCurrentVideoMode;
 		uintptr_t createWindow;
 		size_t createWindowSize;
-		uintptr_t initPresentationParams;
-		uintptr_t initPresentationParamsStore;
-		enum class PresentationStore { Ebp, Ebx } presentationStore;
-		uintptr_t initD3dDevice;
-		uintptr_t initD3dDeviceStore;
-		enum class DeviceStore { Eax, Ebp } deviceStore;
-		uintptr_t resolutionColoring;
-		uintptr_t resolutionDisabling;
-		size_t resolutionDisablingSize;
 		uintptr_t resolutionHook;
+		uintptr_t direct3DCreate8;
 	};
 
 	constexpr uint32_t D3DFMT_X8R8G8B8 = 22;
@@ -109,64 +93,52 @@ namespace
 	constexpr char WindowStateTopKey[] = "Top";
 
 	const Addresses III_10 = {
-		Game::III, L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
-		0x8F4360, 0x662EF0, 0x943010, 0x662F18, 0x5A0ED0, 0x5A0F30,
+		L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
+		0x8F4360, 0x943010, 0x662F18, 0x5A0ED0, 0x5A0F30,
 		0x580F20, 6,
-		0x5B7DA1, 0x943038, Addresses::PresentationStore::Ebp,
-		0x5B76B8, 0x662F04, Addresses::DeviceStore::Eax,
-		0x47C6B8, 0x4882CA, 6, 0x487842
+		0x487842, 0x5B7459
 	};
 
 	const Addresses III_11 = {
-		Game::III, L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
-		0x8F4414, 0x662EF0, 0x9431C8, 0x662F18, 0x5A1190, 0x5A11F0,
+		L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
+		0x8F4414, 0x9431C8, 0x662F18, 0x5A1190, 0x5A11F0,
 		0x581270, 6,
-		0x5B8061, 0x9431F0, Addresses::PresentationStore::Ebp,
-		0x5B7978, 0x662F04, Addresses::DeviceStore::Eax,
-		0x47C788, 0x4883CA, 6, 0x487942
+		0x487942, 0x5B7719
+	};
+
+	const Addresses III_Steam = {
+		L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
+		0x904554, 0x953308, 0x673410, 0x5A17D0, 0x5A18B0,
+		0x581170, 6,
+		0x487942, 0x5BC28D
 	};
 
 	const Addresses VC_10 = {
-		Game::VC, L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
-		0x9B48D8, 0x7897A8, 0xA0FD04, 0x7897D0, 0x642B40, 0x642BA0,
+		L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
+		0x9B48D8, 0xA0FD04, 0x7897D0, 0x642B40, 0x642BA0,
 		0x5FFC75, 6,
-		0x65C0B4, 0xA0FD24, Addresses::PresentationStore::Ebx,
-		0x65C4E2, 0x789BF4, Addresses::DeviceStore::Ebp,
-		0x49EDBC, 0x499F57, 2, 0x4999D0
+		0x4999D0, 0x65B857
 	};
 
 	const Addresses VC_11 = {
-		Game::VC, L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
-		0x9B48E0, 0x7897B0, 0xA0FD0C, 0x7897D8, 0x642B90, 0x642BF0,
+		L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
+		0x9B48E0, 0xA0FD0C, 0x7897D8, 0x642B90, 0x642BF0,
 		0x5FFC95, 6,
-		0x65C104, 0xA0FD2C, Addresses::PresentationStore::Ebx,
-		0x65C532, 0x789BFC, Addresses::DeviceStore::Ebp,
-		0x49EDDD, 0x499F78, 2, 0x4999F1
+		0x4999F1, 0x65B8A7
 	};
 
 	const Addresses VC_JP = {
-		Game::VC, L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
-		0x9B18E8, 0x7867B0, 0xA0CD14, 0x7867D8, 0x641B70, 0x641BD0,
+		L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
+		0x9B18E8, 0xA0CD14, 0x7867D8, 0x641B70, 0x641BD0,
 		0x5FF826, 5,
-		0x65B0E4, 0xA0CD34, Addresses::PresentationStore::Ebx,
-		0x65B512, 0x786BFC, Addresses::DeviceStore::Ebp,
-		0x49EC68, 0x499EF0, 2, 0x499969
+		0x499969, 0x65A887
 	};
-
-	extern "C" void InitPresentationParams_StoreEbp();
-	extern "C" void InitPresentationParams_StoreEbx();
-	extern "C" void InitD3dDevice_StoreEax();
-	extern "C" void InitD3dDevice_StoreEbp();
 
 	const Addresses* Current = nullptr;
 	HWND Window = nullptr;
 	WNDPROC OriginalWndProc = nullptr;
 	POINT ClientSize = { 640, 480 };
 	int ForcedCursorShowCount = 0;
-	uintptr_t InitPresentationReturn = 0;
-	uintptr_t InitPresentationStore = 0;
-	uintptr_t InitD3dDeviceReturn = 0;
-	uintptr_t InitD3dDeviceStore = 0;
 	std::vector<DisplayMode> VideoModesBackup;
 	uint32_t PreviousVideoMode = UINT32_MAX;
 	WindowedMode CurrentWindowedMode = WindowedMode::Off;
@@ -178,6 +150,11 @@ namespace
 	ResetFunc ResetOriginal = nullptr;
 	using ChangeVideoModeFunc = void(__cdecl*)(uint32_t);
 	ChangeVideoModeFunc ChangeVideoModeOriginal = nullptr;
+	using Direct3DCreate8Func = void* (WINAPI*)(uint32_t sdkVersion);
+	Direct3DCreate8Func Direct3DCreate8Original = nullptr;
+	using CreateDeviceFunc = HRESULT(__stdcall*)(void* self, uint32_t adapter, uint32_t deviceType,
+		HWND focusWindow, DWORD behaviorFlags, D3D8PresentParameters* params, void** device);
+	CreateDeviceFunc CreateDeviceOriginal = nullptr;
 
 	template<typename T>
 	T* Dyn(uintptr_t address)
@@ -664,9 +641,12 @@ namespace
 			return false;
 		}
 
-		auto numVideoModes = reinterpret_cast<uint32_t(__cdecl*)()>(Memory::DynBaseAddress(Current->RwEngineGetNumVideoModes));
-		modeCount = numVideoModes();
-		return modeCount != 0;
+		// RenderWare returns -1 when its device-system query fails. Do not turn
+		// that error into an unsigned array length.
+		auto numVideoModes = reinterpret_cast<int32_t(__cdecl*)()>(Memory::DynBaseAddress(Current->RwEngineGetNumVideoModes));
+		const int32_t count = numVideoModes();
+		modeCount = count > 0 ? static_cast<uint32_t>(count) : 0;
+		return count > 0;
 	}
 
 	void BackupVideoModes(DisplayMode* videoModes, uint32_t modeCount)
@@ -921,14 +901,13 @@ namespace
 		return ResetOriginal(self, Dyn<D3D8PresentParameters>(Current->d3dPresentParams));
 	}
 
-	void HookD3dDevice()
+	void HookD3dDevice(void* device)
 	{
 		if (Current == nullptr)
 		{
 			return;
 		}
 
-		void* device = *Dyn<void*>(Current->d3dDevice);
 		if (device == nullptr)
 		{
 			return;
@@ -950,6 +929,46 @@ namespace
 			vtable[14] = reinterpret_cast<uintptr_t>(&ResetHook);
 			VirtualProtect(&vtable[14], sizeof(vtable[14]), oldProtect, &oldProtect);
 		}
+	}
+
+	HRESULT __stdcall CreateDeviceHook(void* self, uint32_t adapter, uint32_t deviceType,
+		HWND focusWindow, DWORD behaviorFlags, D3D8PresentParameters* params, void** device)
+	{
+		// The interface vtable may also be used by another mod's D3D8 device.
+		if (params != Dyn<D3D8PresentParameters>(Current->d3dPresentParams))
+		{
+			return CreateDeviceOriginal(self, adapter, deviceType, focusWindow, behaviorFlags, params, device);
+		}
+
+		// Apply the shared state after RenderWare initializes the presentation
+		// parameters on each attempt, including fallback device creation.
+		ApplyWindowedStateFromPresentationParams();
+		const HRESULT result = CreateDeviceOriginal(self, adapter, deviceType, focusWindow, behaviorFlags, params, device);
+		if (SUCCEEDED(result))
+		{
+			HookD3dDevice(*device);
+		}
+		return result;
+	}
+
+	void* WINAPI Direct3DCreate8Hook(uint32_t sdkVersion)
+	{
+		void* direct3D = Direct3DCreate8Original(sdkVersion);
+		if (direct3D != nullptr)
+		{
+			uintptr_t* vtable = *static_cast<uintptr_t**>(direct3D);
+			if (vtable[15] != reinterpret_cast<uintptr_t>(&CreateDeviceHook))
+			{
+				DWORD oldProtect;
+				if (VirtualProtect(&vtable[15], sizeof(vtable[15]), PAGE_EXECUTE_READWRITE, &oldProtect) != FALSE)
+				{
+					CreateDeviceOriginal = reinterpret_cast<CreateDeviceFunc>(vtable[15]);
+					vtable[15] = reinterpret_cast<uintptr_t>(&CreateDeviceHook);
+					VirtualProtect(&vtable[15], sizeof(vtable[15]), oldProtect, &oldProtect);
+				}
+			}
+		}
+		return direct3D;
 	}
 
 	HWND __stdcall CreateWindowHook(DWORD, LPCSTR className, LPCSTR windowName, DWORD, int, int, int width, int height,
@@ -989,16 +1008,6 @@ namespace
 		ResizeWindowToClient();
 	}
 
-	void PatchJump(uintptr_t address, void* hook, size_t size)
-	{
-		using namespace Memory::DynBase;
-		InjectHook(address, hook, HookType::Jump);
-		if (size > 5)
-		{
-			Nop(address + 5, size - 5);
-		}
-	}
-
 	void PatchCall(uintptr_t address, void* hook, size_t size)
 	{
 		using namespace Memory::DynBase;
@@ -1007,11 +1016,6 @@ namespace
 		{
 			Nop(address + 5, size - 5);
 		}
-	}
-
-	size_t InitD3dDevicePatchSize(const Addresses& addresses)
-	{
-		return addresses.deviceStore == Addresses::DeviceStore::Eax ? 5 : 6;
 	}
 
 	bool Install(const Addresses& addresses, HINSTANCE module)
@@ -1029,117 +1033,12 @@ namespace
 		PreviousVideoMode = UINT32_MAX;
 		ChangeVideoModeOriginal = nullptr;
 		InitWindowStatePath(addresses.windowStateIniName);
-		InitPresentationReturn = Memory::DynBaseAddress(addresses.initPresentationParams + 6);
-		InitPresentationStore = Memory::DynBaseAddress(addresses.initPresentationParamsStore);
-		InitD3dDeviceReturn = Memory::DynBaseAddress(addresses.initD3dDevice + InitD3dDevicePatchSize(addresses));
-		InitD3dDeviceStore = Memory::DynBaseAddress(addresses.initD3dDeviceStore);
-
 		PatchCall(addresses.createWindow, &CreateWindowHook, addresses.createWindowSize);
 
-		if (addresses.presentationStore == Addresses::PresentationStore::Ebp)
-		{
-			PatchJump(addresses.initPresentationParams, &InitPresentationParams_StoreEbp, 6);
-		}
-		else
-		{
-			PatchJump(addresses.initPresentationParams, &InitPresentationParams_StoreEbx, 6);
-		}
-
-		if (addresses.deviceStore == Addresses::DeviceStore::Eax)
-		{
-			PatchJump(addresses.initD3dDevice, &InitD3dDevice_StoreEax, InitD3dDevicePatchSize(addresses));
-		}
-		else
-		{
-			PatchJump(addresses.initD3dDevice, &InitD3dDevice_StoreEbp, InitD3dDevicePatchSize(addresses));
-		}
-
-		/* Disable resolution changes, not vanilla behavior and unstable.
-		if (addresses.game == Game::III)
-		{
-			Memory::DynBase::Patch<uint8_t>(addresses.resolutionColoring, 0xEB);
-		}
-		else
-		{
-			Memory::DynBase::Patch<uint16_t>(addresses.resolutionColoring, 0xE990);
-		}
-		
-		Memory::DynBase::Nop(addresses.resolutionDisabling, addresses.resolutionDisablingSize);
-		*/
+		Memory::DynBase::InterceptCall(addresses.direct3DCreate8, Direct3DCreate8Original, Direct3DCreate8Hook);
 		Memory::DynBase::InterceptCall(addresses.resolutionHook, ChangeVideoModeOriginal, ChangeVideoModeHook);
 
 		return true;
-	}
-}
-
-extern "C" __declspec(naked) void InitPresentationParams_StoreEbp()
-{
-	__asm
-	{
-		push eax
-		mov eax, InitPresentationStore
-		mov [eax], ebp
-		pop eax
-		pushfd
-		pushad
-		call ApplyWindowedStateFromPresentationParams
-		popad
-		popfd
-		jmp dword ptr [InitPresentationReturn]
-	}
-}
-
-extern "C" __declspec(naked) void InitPresentationParams_StoreEbx()
-{
-	__asm
-	{
-		push eax
-		mov eax, InitPresentationStore
-		mov [eax], ebx
-		pop eax
-		pushfd
-		pushad
-		call ApplyWindowedStateFromPresentationParams
-		popad
-		popfd
-		jmp dword ptr [InitPresentationReturn]
-	}
-}
-
-extern "C" __declspec(naked) void InitD3dDevice_StoreEax()
-{
-	__asm
-	{
-		push edx
-		mov edx, InitD3dDeviceStore
-		mov [edx], eax
-		pop edx
-		pushfd
-		test eax, eax
-		jz nohook
-		pushad
-		call HookD3dDevice
-		popad
-	nohook:
-		popfd
-		jmp dword ptr [InitD3dDeviceReturn]
-	}
-}
-
-extern "C" __declspec(naked) void InitD3dDevice_StoreEbp()
-{
-	__asm
-	{
-		push eax
-		mov eax, InitD3dDeviceStore
-		mov [eax], ebp
-		pop eax
-		pushfd
-		pushad
-		call HookD3dDevice
-		popad
-		popfd
-		jmp dword ptr [InitD3dDeviceReturn]
 	}
 }
 
@@ -1153,6 +1052,11 @@ namespace WindowedModeDDraw
 	bool InstallIII11(HINSTANCE module)
 	{
 		return Install(III_11, module);
+	}
+
+	bool InstallIIISteam(HINSTANCE module)
+	{
+		return Install(III_Steam, module);
 	}
 
 	bool InstallVC10(HINSTANCE module)

@@ -361,6 +361,7 @@ void InjectHooks()
 		affinityIniName = III_INI_NAME;
 #endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x580E66));
+		INSTALL_WINDOWED_MODE(IIISteam);
 		Common::Patches::DDraw_III_Steam( width, height, aNoDesktopMode );
 	}
 
