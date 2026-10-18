@@ -195,3 +195,5 @@ Desktop.ini
 $RECYCLE.BIN/
 vcpkg_installed/
 SpeedrunSilentPatch.Local.props
+
+/tests/
