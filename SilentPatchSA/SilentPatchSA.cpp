@@ -457,7 +457,13 @@ namespace SpeedrunVersionText
 
 #define SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL(value) #value
 #define SPEEDRUN_VERSION_TEXT_STRINGIZE(value) SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL(value)
-	static char Text[] = "SpeedrunSilentPatch build " SPEEDRUN_VERSION_TEXT_STRINGIZE(SILENTPATCH_BUILD_ID);
+	static char Text[] = "SpeedrunSilentPatch build " SPEEDRUN_VERSION_TEXT_STRINGIZE(SILENTPATCH_BUILD_ID)
+#if defined(_DEBUG)
+		" (debug)"
+#elif !defined(NDEBUG)
+		" (preview)"
+#endif
+		;
 #undef SPEEDRUN_VERSION_TEXT_STRINGIZE
 #undef SPEEDRUN_VERSION_TEXT_STRINGIZE_DETAIL
 
