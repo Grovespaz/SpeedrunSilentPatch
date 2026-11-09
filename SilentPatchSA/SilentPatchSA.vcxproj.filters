@@ -164,6 +164,9 @@
     <ClInclude Include="..\SilentPatch\Desktop.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\SilentPatch\WindowedModeTaskbar.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\SilentPatch\RWUtils.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>

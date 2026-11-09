@@ -1,6 +1,7 @@
 #include "StdAfxSA.h"
 
 #include "WindowedModeSA.h"
+#include "WindowedModeTaskbar.h"
 
 #include <d3d9.h>
 #include <Shlwapi.h>
@@ -65,6 +66,7 @@ namespace
 	WindowedMode CurrentWindowedMode = WindowedMode::Off;
 	bool AlwaysOnTop = false;
 	bool InternalWindowPlacement = false;
+	WindowedModeTaskbar Taskbar;
 	char WindowStatePath[MAX_PATH] = {};
 
 	using ResetFunc = HRESULT(__stdcall*)(IDirect3DDevice9*, D3DPRESENT_PARAMETERS*);
@@ -481,6 +483,8 @@ namespace
 
 	LRESULT CALLBACK WindowedModeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
+		Taskbar.HandleMessage(hwnd, message, wParam, lParam);
+
 		if (IsInternalWindowPlacementMessage(message))
 		{
 			return 0;
@@ -898,6 +902,7 @@ namespace
 			nullptr, nullptr, instance, param);
 		HookWindowProc();
 		ApplyWindowHandleState();
+		Taskbar.OnWindowCreated(Window);
 		return Window;
 	}
 

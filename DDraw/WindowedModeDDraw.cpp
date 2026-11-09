@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "Common_ddraw.h"
+#include "WindowedModeTaskbar.h"
 #include "Utils/MemoryMgr.h"
 
 #pragma comment(lib, "shlwapi.lib")
@@ -151,6 +152,7 @@ namespace
 	WindowedMode CurrentWindowedMode = WindowedMode::Off;
 	bool AlwaysOnTop = false;
 	bool InternalWindowPlacement = false;
+	WindowedModeTaskbar Taskbar;
 	char WindowStatePath[MAX_PATH] = {};
 
 	using ResetFunc = HRESULT(__stdcall*)(void*, D3D8PresentParameters*);
@@ -564,6 +566,8 @@ namespace
 
 	LRESULT CALLBACK WindowedModeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
+		Taskbar.HandleMessage(hwnd, message, wParam, lParam);
+
 		if (IsInternalWindowPlacementMessage(message))
 		{
 			return 0;
@@ -996,6 +1000,7 @@ namespace
 			nullptr, nullptr, instance, param);
 		HookWindowProc();
 		ApplyWindowHandleState();
+		Taskbar.OnWindowCreated(Window);
 		return Window;
 	}
 

@@ -248,6 +248,7 @@
   <ItemGroup>
     <ClInclude Include="..\SilentPatch\debugmenu_public.h" />
     <ClInclude Include="..\SilentPatch\Desktop.h" />
+    <ClInclude Include="..\SilentPatch\WindowedModeTaskbar.h" />
     <ClInclude Include="..\SilentPatch\FriendlyMonitorNames.h" />
     <ClInclude Include="..\SilentPatch\Maths.h" />
     <ClInclude Include="..\SilentPatch\ParseUtils.hpp" />

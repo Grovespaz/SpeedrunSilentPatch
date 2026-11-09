@@ -173,6 +173,7 @@
   <ItemGroup>
     <ClInclude Include="..\SilentPatch\Common_ddraw.h" />
     <ClInclude Include="..\SilentPatch\Desktop.h" />
+    <ClInclude Include="..\SilentPatch\WindowedModeTaskbar.h" />
     <ClInclude Include="..\SilentPatch\Utils\MemoryMgr.h" />
     <ClInclude Include="..\SilentPatch\Utils\Patterns.h" />
     <ClInclude Include="config_all_fixes.h" />

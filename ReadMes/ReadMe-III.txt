@@ -73,6 +73,9 @@ CONFIGURATION
 
 WINDOWED MODE
 
+	In both Framed and Borderless modes, SSP asks Windows to keep the taskbar behind screen-sized game windows while active.
+	The taskbar returns when you switch away. Windows may ignore this hint for smaller windows.
+
 	SSP stores the last exact window position in `Documents\GTA3 User Files\SpeedrunSilentPatchIII.WindowedMode.ini`.
 	If you want to precisely adjust the position you want the game to be on startup, you can edit the `Left` and `Top` values in that file.
 
