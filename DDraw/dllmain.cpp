@@ -334,6 +334,32 @@ static void SkipIntroSplashesVC(uintptr_t firstMovieState, uintptr_t initOnceAft
 }
 #endif
 
+#if ENABLE_FIX_VC_JAPANESE_SETTINGS_CRASH
+static const uint32_t* vcPrefsLanguage;
+static void (__thiscall* LoadVCTextOriginal)(void* text);
+
+static void __fastcall LoadVCTextFromSettings_Hook(void* text, void*)
+{
+	constexpr uint32_t JAPANESE_LANGUAGE = 5;
+	if (*vcPrefsLanguage == JAPANESE_LANGUAGE)
+	{
+		MessageBoxW(GetActiveWindow(),
+			L"gta_vc.set contains the Japanese language setting, which this edition of Vice City cannot load.\n\n"
+			L"Rename or move gta_vc.set from Documents\\GTA Vice City User Files, then start the game again.",
+			L"Grand Theft Auto Vice City", MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+		ExitProcess(ERROR_INVALID_DATA);
+	}
+
+	LoadVCTextOriginal(text);
+}
+
+static void InstallVCSettingsLanguageCheck(uintptr_t loadTextCall, uintptr_t prefsLanguage)
+{
+	vcPrefsLanguage = Memory::DynBaseAddress(reinterpret_cast<const uint32_t*>(prefsLanguage));
+	Memory::DynBase::InterceptCall(loadTextCall, LoadVCTextOriginal, LoadVCTextFromSettings_Hook);
+}
+#endif
+
 void InjectHooks()
 {
 	static char		aNoDesktopMode[64];
@@ -391,6 +417,9 @@ void InjectHooks()
 		affinityIniName = VC_INI_NAME;
 #endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x6022AA));
+#if ENABLE_FIX_VC_JAPANESE_SETTINGS_CRASH
+		InstallVCSettingsLanguageCheck(0x490160, 0x869680);
+#endif
 #if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
 		// The original and NoCD 1.0 executables share this switch table and code.
 		SkipIntroSplashesVC(0x6D68E8, 0x600318);
@@ -405,6 +434,9 @@ void InjectHooks()
 		affinityIniName = VC_INI_NAME;
 #endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x60228A));
+#if ENABLE_FIX_VC_JAPANESE_SETTINGS_CRASH
+		InstallVCSettingsLanguageCheck(0x490170, 0x869688);
+#endif
 #if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
 		SkipIntroSplashesVC(0x6D68BC, 0x600338);
 #endif
@@ -418,6 +450,9 @@ void InjectHooks()
 		affinityIniName = VC_INI_NAME;
 #endif
 		ppUserFilesDir.Bind(Memory::DynBaseAddress((const char (**)[])0x601ECA));
+#if ENABLE_FIX_VC_JAPANESE_SETTINGS_CRASH
+		InstallVCSettingsLanguageCheck(0x490070, 0x868688);
+#endif
 #if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
 		SkipIntroSplashesVC(0x6D58B4, 0x5FFF78);
 #endif

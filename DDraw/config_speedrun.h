@@ -14,6 +14,7 @@
 #define ENABLE_FIX_CPU_AFFINITY 1
 // Stabilize the leftover SecuROM helper and allow the no-CD executable to run without optical drives.
 #define ENABLE_FIX_VC_JP_NO_CD_BOOTSTRAP 1
+#define ENABLE_FIX_VC_JAPANESE_SETTINGS_CRASH 1
 #define ENABLE_ENHANCEMENT_DEFAULT_DESKTOP_RESOLUTION 1
 #define ENABLE_ENHANCEMENT_NO_CENSORSHIP 1
 #define ENABLE_ENHANCEMENT_WINDOWED_MODE 1
