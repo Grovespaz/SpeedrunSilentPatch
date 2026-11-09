@@ -7,6 +7,7 @@
 #include <shellapi.h>
 #include <Shlwapi.h>
 #include <ShlObj.h>
+#include <intrin.h>
 #include "Utils/MemoryMgr.h"
 #include "Utils/Patterns.h"
 #include "Utils/ScopedUnprotect.hpp"
@@ -16,6 +17,7 @@
 #include "DDrawFeatureConfig.h"
 #include "Desktop.h"
 #include "WindowedModeDDraw.h"
+#include "Startup.h"
 
 #pragma comment(lib, "shlwapi.lib")
 
@@ -419,6 +421,7 @@ void InjectHooks()
 #if ENABLE_ENHANCEMENT_SKIP_INTRO_SPLASHES
 		SkipIntroSplashesVC(0x6D58B4, 0x5FFF78);
 #endif
+		INSTALL_WINDOWED_MODE(VCSteam);
 		Common::Patches::DDraw_VC_Steam( width, height, aNoDesktopMode );
 	}
 	else if (*(DWORD*)Memory::DynBaseAddress(0x601048) == 0x5E5F5D60)
@@ -473,7 +476,12 @@ static void ProcHook()
 static VOID (WINAPI* pOrgGetStartupInfoA)(LPSTARTUPINFOA);
 VOID WINAPI GetStartupInfoA_Hook(LPSTARTUPINFOA lpStartupInfo)
 {
-	ProcHook();
+	// Protected executables also call this API from their bootstrap sections.
+	// Wait for the game's CRT: the bootstrap can still replace code/imports.
+	if (DDrawStartup::IsGameCodeAddress(GetModuleHandle(nullptr), _ReturnAddress()))
+	{
+		ProcHook();
+	}
 	pOrgGetStartupInfoA(lpStartupInfo);
 }
 

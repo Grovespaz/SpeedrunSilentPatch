@@ -179,6 +179,7 @@
     <ClInclude Include="config_speedrun.h" />
     <ClInclude Include="DDrawFeatureConfig.h" />
     <ClInclude Include="WindowedModeDDraw.h" />
+    <ClInclude Include="Startup.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

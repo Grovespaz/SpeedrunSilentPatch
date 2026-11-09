@@ -9,6 +9,7 @@ namespace WindowedModeDDraw
 	bool InstallIIISteam(HINSTANCE module);
 	bool InstallVC10(HINSTANCE module);
 	bool InstallVC11(HINSTANCE module);
+	bool InstallVCSteam(HINSTANCE module);
 	bool InstallVCJP(HINSTANCE module);
 	bool IsFramedMode();
 }

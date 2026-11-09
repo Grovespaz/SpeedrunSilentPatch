@@ -80,7 +80,7 @@ namespace
 		uintptr_t createWindow;
 		size_t createWindowSize;
 		uintptr_t resolutionHook;
-		uintptr_t direct3DCreate8;
+		uintptr_t direct3DCreate8IAT;
 	};
 
 	constexpr uint32_t D3DFMT_X8R8G8B8 = 22;
@@ -96,42 +96,49 @@ namespace
 		L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
 		0x8F4360, 0x943010, 0x662F18, 0x5A0ED0, 0x5A0F30,
 		0x580F20, 6,
-		0x487842, 0x5B7459
+		0x487842, 0x61D590
 	};
 
 	const Addresses III_11 = {
 		L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
 		0x8F4414, 0x9431C8, 0x662F18, 0x5A1190, 0x5A11F0,
 		0x581270, 6,
-		0x487942, 0x5B7719
+		0x487942, 0x61D590
 	};
 
 	const Addresses III_Steam = {
 		L"SpeedrunSilentPatchIII.ini", "SpeedrunSilentPatchIII.WindowedMode.ini",
 		0x904554, 0x953308, 0x673410, 0x5A17D0, 0x5A18B0,
 		0x581170, 6,
-		0x487942, 0x5BC28D
+		0x487942, 0x62D590
 	};
 
 	const Addresses VC_10 = {
 		L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
 		0x9B48D8, 0xA0FD04, 0x7897D0, 0x642B40, 0x642BA0,
 		0x5FFC75, 6,
-		0x4999D0, 0x65B857
+		0x4999D0, 0x6F25A4
 	};
 
 	const Addresses VC_11 = {
 		L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
 		0x9B48E0, 0xA0FD0C, 0x7897D8, 0x642B90, 0x642BF0,
 		0x5FFC95, 6,
-		0x4999F1, 0x65B8A7
+		0x4999F1, 0x6F25A4
+	};
+
+	const Addresses VC_Steam = {
+		L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
+		0x9B38E0, 0xA0ED0C, 0x7887D8, 0x641AF0, 0x641B50,
+		0x5FF8D5, 6,
+		0x4998F1, 0x6F1594
 	};
 
 	const Addresses VC_JP = {
 		L"SpeedrunSilentPatchVC.ini", "SpeedrunSilentPatchVC.WindowedMode.ini",
 		0x9B18E8, 0xA0CD14, 0x7867D8, 0x641B70, 0x641BD0,
 		0x5FF826, 5,
-		0x499969, 0x65A887
+		0x499969, 0x6EF5C8
 	};
 
 	const Addresses* Current = nullptr;
@@ -1035,7 +1042,15 @@ namespace
 		InitWindowStatePath(addresses.windowStateIniName);
 		PatchCall(addresses.createWindow, &CreateWindowHook, addresses.createWindowSize);
 
-		Memory::DynBase::InterceptCall(addresses.direct3DCreate8, Direct3DCreate8Original, Direct3DCreate8Hook);
+		// Display enumeration creates another factory after RenderWare opens its
+		// renderer. Windows compatibility shims can replace the shared vtable then,
+		// so intercept every game factory call and reapply our hook after each one.
+		auto factoryImport = Dyn<Direct3DCreate8Func>(addresses.direct3DCreate8IAT);
+		if (*factoryImport != &Direct3DCreate8Hook)
+		{
+			Direct3DCreate8Original = *factoryImport;
+			Memory::VP::Patch(factoryImport, &Direct3DCreate8Hook);
+		}
 		Memory::DynBase::InterceptCall(addresses.resolutionHook, ChangeVideoModeOriginal, ChangeVideoModeHook);
 
 		return true;
@@ -1067,6 +1082,11 @@ namespace WindowedModeDDraw
 	bool InstallVC11(HINSTANCE module)
 	{
 		return Install(VC_11, module);
+	}
+
+	bool InstallVCSteam(HINSTANCE module)
+	{
+		return Install(VC_Steam, module);
 	}
 
 	bool InstallVCJP(HINSTANCE module)
